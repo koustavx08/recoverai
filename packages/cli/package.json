@@ -1,0 +1,33 @@
+{
+  "name": "@recoverai/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RecoverAI developer-facing CLI",
+  "type": "module",
+  "bin": {
+    "recoverai": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@recoverai/agents": "workspace:*",
+    "@recoverai/config": "workspace:*",
+    "@recoverai/core": "workspace:*",
+    "@recoverai/database": "workspace:*",
+    "@recoverai/integrations": "workspace:*",
+    "commander": "^13.1.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

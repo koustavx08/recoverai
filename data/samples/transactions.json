@@ -1,0 +1,266 @@
+[
+  {
+    "id": "txn_00001",
+    "merchantId": "mer_aurora_retail",
+    "customerId": "cus_0001",
+    "amount": { "amount": 249900, "currency": "INR" },
+    "status": "succeeded",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "atm_00001",
+        "transactionId": "txn_00001",
+        "status": "succeeded",
+        "paymentMethod": "card",
+        "attemptedAt": "2025-03-15T10:02:11.000Z"
+      }
+    ],
+    "createdAt": "2025-03-15T10:02:00.000Z",
+    "updatedAt": "2025-03-15T10:02:11.000Z",
+    "metadata": { "scenario": "successful_payment" }
+  },
+  {
+    "id": "txn_00002",
+    "merchantId": "mer_aurora_retail",
+    "customerId": "cus_0002",
+    "amount": { "amount": 189900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "atm_00002",
+        "transactionId": "txn_00002",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "issuer_decline",
+        "providerErrorMessage": "Card issuer declined the transaction (do not honor).",
+        "attemptedAt": "2025-03-16T11:14:02.000Z"
+      }
+    ],
+    "createdAt": "2025-03-16T11:14:00.000Z",
+    "updatedAt": "2025-03-16T11:14:02.000Z",
+    "metadata": { "scenario": "issuer_decline" }
+  },
+  {
+    "id": "txn_00003",
+    "merchantId": "mer_aurora_retail",
+    "customerId": "cus_0003",
+    "amount": { "amount": 59900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "atm_00003",
+        "transactionId": "txn_00003",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "insufficient_funds",
+        "providerErrorMessage": "Insufficient balance on card.",
+        "attemptedAt": "2025-03-17T09:30:44.000Z"
+      }
+    ],
+    "createdAt": "2025-03-17T09:30:00.000Z",
+    "updatedAt": "2025-03-17T09:30:44.000Z",
+    "metadata": { "scenario": "insufficient_funds" }
+  },
+  {
+    "id": "txn_00004",
+    "merchantId": "mer_northwind_saas",
+    "customerId": "cus_0007",
+    "amount": { "amount": 149900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "upi",
+    "attempts": [
+      {
+        "id": "atm_00004",
+        "transactionId": "txn_00004",
+        "status": "failed",
+        "paymentMethod": "upi",
+        "failureReasonCode": "upi_failure",
+        "providerErrorMessage": "UPI collect request expired without customer approval.",
+        "attemptedAt": "2025-03-18T15:02:09.000Z"
+      }
+    ],
+    "createdAt": "2025-03-18T15:01:50.000Z",
+    "updatedAt": "2025-03-18T15:02:09.000Z",
+    "metadata": { "scenario": "upi_failure" }
+  },
+  {
+    "id": "txn_00005",
+    "merchantId": "mer_aurora_retail",
+    "customerId": "cus_0004",
+    "amount": { "amount": 329900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "netbanking",
+    "attempts": [
+      {
+        "id": "atm_00005",
+        "transactionId": "txn_00005",
+        "status": "failed",
+        "paymentMethod": "netbanking",
+        "failureReasonCode": "network_timeout",
+        "providerErrorMessage": "Gateway timed out waiting for bank response.",
+        "attemptedAt": "2025-03-19T07:44:31.000Z"
+      }
+    ],
+    "createdAt": "2025-03-19T07:44:00.000Z",
+    "updatedAt": "2025-03-19T07:44:31.000Z",
+    "metadata": { "scenario": "network_timeout" }
+  },
+  {
+    "id": "txn_00006",
+    "merchantId": "mer_northwind_saas",
+    "customerId": "cus_0008",
+    "amount": { "amount": 99900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "atm_00006",
+        "transactionId": "txn_00006",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "expired_card",
+        "providerErrorMessage": "Card expired as of 02/25.",
+        "attemptedAt": "2025-03-20T12:19:55.000Z"
+      }
+    ],
+    "createdAt": "2025-03-20T12:19:00.000Z",
+    "updatedAt": "2025-03-20T12:19:55.000Z",
+    "metadata": { "scenario": "expired_card" }
+  },
+  {
+    "id": "txn_00007",
+    "merchantId": "mer_aurora_retail",
+    "customerId": "cus_0005",
+    "amount": { "amount": 419900, "currency": "INR" },
+    "status": "abandoned",
+    "paymentMethod": "unknown",
+    "attempts": [],
+    "createdAt": "2025-03-21T18:05:00.000Z",
+    "updatedAt": "2025-03-21T18:05:00.000Z",
+    "metadata": { "scenario": "checkout_abandonment" }
+  },
+  {
+    "id": "txn_00008",
+    "merchantId": "mer_aurora_retail",
+    "customerId": "cus_0006",
+    "amount": { "amount": 259900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "atm_00008a",
+        "transactionId": "txn_00008",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "issuer_decline",
+        "providerErrorMessage": "Card issuer declined the transaction (do not honor).",
+        "attemptedAt": "2025-03-22T09:00:12.000Z"
+      },
+      {
+        "id": "atm_00008b",
+        "transactionId": "txn_00008",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "issuer_decline",
+        "providerErrorMessage": "Card issuer declined the transaction (do not honor).",
+        "attemptedAt": "2025-03-22T09:15:47.000Z"
+      },
+      {
+        "id": "atm_00008c",
+        "transactionId": "txn_00008",
+        "status": "failed",
+        "paymentMethod": "netbanking",
+        "failureReasonCode": "network_timeout",
+        "providerErrorMessage": "Gateway timed out waiting for bank response.",
+        "attemptedAt": "2025-03-22T10:02:03.000Z"
+      }
+    ],
+    "createdAt": "2025-03-22T09:00:00.000Z",
+    "updatedAt": "2025-03-22T10:02:03.000Z",
+    "metadata": { "scenario": "repeated_payment_failures" }
+  },
+  {
+    "id": "txn_00009",
+    "merchantId": "mer_northwind_saas",
+    "customerId": "cus_0009",
+    "amount": { "amount": 79900, "currency": "INR" },
+    "status": "refunded",
+    "paymentMethod": "upi",
+    "attempts": [
+      {
+        "id": "atm_00009",
+        "transactionId": "txn_00009",
+        "status": "succeeded",
+        "paymentMethod": "upi",
+        "attemptedAt": "2025-03-23T14:10:00.000Z"
+      }
+    ],
+    "createdAt": "2025-03-23T14:09:00.000Z",
+    "updatedAt": "2025-03-24T09:00:00.000Z",
+    "metadata": { "scenario": "refund", "refundReason": "customer_requested" }
+  },
+  {
+    "id": "txn_00010",
+    "merchantId": "mer_northwind_saas",
+    "customerId": "cus_0010",
+    "amount": { "amount": 599900, "currency": "INR" },
+    "status": "pending",
+    "paymentMethod": "netbanking",
+    "attempts": [
+      {
+        "id": "atm_00010",
+        "transactionId": "txn_00010",
+        "status": "pending",
+        "paymentMethod": "netbanking",
+        "attemptedAt": "2025-03-25T11:30:00.000Z"
+      }
+    ],
+    "createdAt": "2025-03-25T11:29:40.000Z",
+    "updatedAt": "2025-03-25T11:30:00.000Z",
+    "metadata": { "scenario": "pending_authorization" }
+  },
+  {
+    "id": "txn_00011",
+    "merchantId": "mer_aurora_retail",
+    "customerId": "cus_0002",
+    "amount": { "amount": 129900, "currency": "INR" },
+    "status": "succeeded",
+    "paymentMethod": "wallet",
+    "attempts": [
+      {
+        "id": "atm_00011",
+        "transactionId": "txn_00011",
+        "status": "succeeded",
+        "paymentMethod": "wallet",
+        "attemptedAt": "2025-03-26T20:11:00.000Z"
+      }
+    ],
+    "createdAt": "2025-03-26T20:10:50.000Z",
+    "updatedAt": "2025-03-26T20:11:00.000Z",
+    "metadata": { "scenario": "successful_payment" }
+  },
+  {
+    "id": "txn_00012",
+    "merchantId": "mer_aurora_retail",
+    "customerId": "cus_0003",
+    "amount": { "amount": 219900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "emi",
+    "attempts": [
+      {
+        "id": "atm_00012",
+        "transactionId": "txn_00012",
+        "status": "failed",
+        "paymentMethod": "emi",
+        "failureReasonCode": "authentication_failed",
+        "providerErrorMessage": "3-D Secure authentication was not completed.",
+        "attemptedAt": "2025-03-27T13:45:22.000Z"
+      }
+    ],
+    "createdAt": "2025-03-27T13:44:50.000Z",
+    "updatedAt": "2025-03-27T13:45:22.000Z",
+    "metadata": { "scenario": "authentication_failed" }
+  }
+]

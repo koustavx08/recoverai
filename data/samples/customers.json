@@ -1,0 +1,78 @@
+[
+  {
+    "id": "cus_0001",
+    "merchantId": "mer_aurora_retail",
+    "name": "Asha Verma",
+    "email": "asha.verma@example.com",
+    "phone": "+91-90000-00001",
+    "createdAt": "2025-03-01T08:12:00.000Z"
+  },
+  {
+    "id": "cus_0002",
+    "merchantId": "mer_aurora_retail",
+    "name": "Rohan Mehta",
+    "email": "rohan.mehta@example.com",
+    "phone": "+91-90000-00002",
+    "createdAt": "2025-03-02T10:45:00.000Z"
+  },
+  {
+    "id": "cus_0003",
+    "merchantId": "mer_aurora_retail",
+    "name": "Priya Nair",
+    "email": "priya.nair@example.com",
+    "phone": "+91-90000-00003",
+    "createdAt": "2025-03-03T14:20:00.000Z"
+  },
+  {
+    "id": "cus_0004",
+    "merchantId": "mer_aurora_retail",
+    "name": "Karan Shah",
+    "email": "karan.shah@example.com",
+    "phone": "+91-90000-00004",
+    "createdAt": "2025-03-04T09:05:00.000Z"
+  },
+  {
+    "id": "cus_0005",
+    "merchantId": "mer_aurora_retail",
+    "name": "Meera Iyer",
+    "email": "meera.iyer@example.com",
+    "phone": "+91-90000-00005",
+    "createdAt": "2025-03-05T16:30:00.000Z"
+  },
+  {
+    "id": "cus_0006",
+    "merchantId": "mer_aurora_retail",
+    "name": "Vikram Rao",
+    "email": "vikram.rao@example.com",
+    "phone": "+91-90000-00006",
+    "createdAt": "2025-03-06T11:00:00.000Z"
+  },
+  {
+    "id": "cus_0007",
+    "merchantId": "mer_northwind_saas",
+    "name": "Devika Kulkarni",
+    "email": "devika.kulkarni@example.com",
+    "createdAt": "2025-03-07T09:40:00.000Z"
+  },
+  {
+    "id": "cus_0008",
+    "merchantId": "mer_northwind_saas",
+    "name": "Arjun Bhatt",
+    "email": "arjun.bhatt@example.com",
+    "createdAt": "2025-03-08T13:15:00.000Z"
+  },
+  {
+    "id": "cus_0009",
+    "merchantId": "mer_northwind_saas",
+    "name": "Sneha Kapoor",
+    "email": "sneha.kapoor@example.com",
+    "createdAt": "2025-03-09T17:50:00.000Z"
+  },
+  {
+    "id": "cus_0010",
+    "merchantId": "mer_northwind_saas",
+    "name": "Ibrahim Sheikh",
+    "email": "ibrahim.sheikh@example.com",
+    "createdAt": "2025-03-10T08:25:00.000Z"
+  }
+]

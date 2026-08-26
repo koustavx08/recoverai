@@ -1,0 +1,18 @@
+[
+  {
+    "id": "mer_aurora_retail",
+    "name": "Aurora Retail Co.",
+    "email": "billing@aurora-retail.example",
+    "websiteUrl": "https://aurora-retail.example",
+    "defaultCurrency": "INR",
+    "createdAt": "2025-01-10T09:00:00.000Z"
+  },
+  {
+    "id": "mer_northwind_saas",
+    "name": "Northwind SaaS",
+    "email": "finance@northwind-saas.example",
+    "websiteUrl": "https://northwind-saas.example",
+    "defaultCurrency": "INR",
+    "createdAt": "2025-02-01T09:00:00.000Z"
+  }
+]
