@@ -57,6 +57,19 @@ run(transaction); // the full pipeline, end to end
 calls to the injected agents. Until real agents exist, every method throws
 `AgentNotImplementedError`.
 
+## Relationship to `@recoverai/analysis`
+
+`@recoverai/analysis` (see [`docs/risk-scoring.md`](./risk-scoring.md))
+now implements a real, deterministic, rule-based pipeline —
+`classifyFailure()` and `scoreTransaction()` — that produces exactly the
+`FailureReason` and `RevenueRisk` shapes `DiagnosisAgent.diagnose()` and
+`PrioritizationAgent.prioritize()` are contracted to return. No agent
+interface changed to make this true; it was designed to line up on
+purpose. A future `RuleBasedDiagnosisAgent`/`RuleBasedPrioritizationAgent`
+can likely just call these functions directly, with model-backed
+reasoning introduced later as an alternative implementation of the same
+interfaces — not a rewrite of them.
+
 ## Design intent
 
 - **No agent is a stub that pretends to work.** A method either does real
@@ -74,6 +87,7 @@ calls to the injected agents. Until real agents exist, every method throws
 
 ## What's next
 
-See the README's [Planned implementation phases](../README.md#11-planned-implementation-phases)
-— agent implementation starts with rule-based heuristics against the
-simulator (phases 2–3) before any model-backed reasoning is introduced.
+See the README's [Planned implementation phases](../README.md#12-planned-implementation-phases)
+— agent implementation starts with rule-based heuristics (now available
+via `@recoverai/analysis`) against the simulator, before any model-backed
+reasoning is introduced.

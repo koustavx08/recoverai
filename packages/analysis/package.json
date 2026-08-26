@@ -1,34 +1,30 @@
 {
-  "name": "@recoverai/cli",
+  "name": "@recoverai/analysis",
   "version": "0.1.0",
   "private": true,
-  "description": "RecoverAI developer-facing CLI",
+  "description": "Deterministic transaction ingestion and revenue-risk intelligence pipeline for RecoverAI",
   "type": "module",
-  "bin": {
-    "recoverai": "./dist/index.js"
-  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/index.ts",
+    "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@recoverai/agents": "workspace:*",
-    "@recoverai/analysis": "workspace:*",
-    "@recoverai/config": "workspace:*",
     "@recoverai/core": "workspace:*",
     "@recoverai/database": "workspace:*",
-    "@recoverai/integrations": "workspace:*",
-    "commander": "^13.1.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5",
     "rimraf": "^6.0.1",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
 }

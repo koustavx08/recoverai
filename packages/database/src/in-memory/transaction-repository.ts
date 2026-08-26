@@ -16,6 +16,10 @@ export class InMemoryTransactionRepository implements TransactionRepository {
     return [...this.byId.values()].filter((tx) => tx.merchantId === merchantId);
   }
 
+  async findAll(): Promise<readonly Transaction[]> {
+    return [...this.byId.values()];
+  }
+
   async save(transaction: Transaction): Promise<void> {
     this.byId.set(transaction.id, transaction);
   }

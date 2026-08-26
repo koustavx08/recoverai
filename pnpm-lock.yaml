@@ -41,9 +41,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@recoverai/analysis':
+        specifier: workspace:*
+        version: link:../../packages/analysis
       '@recoverai/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@recoverai/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -116,11 +122,33 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  packages/analysis:
+    dependencies:
+      '@recoverai/core':
+        specifier: workspace:*
+        version: link:../core
+      '@recoverai/database':
+        specifier: workspace:*
+        version: link:../database
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.1.3
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   packages/cli:
     dependencies:
       '@recoverai/agents':
         specifier: workspace:*
         version: link:../agents
+      '@recoverai/analysis':
+        specifier: workspace:*
+        version: link:../analysis
       '@recoverai/config':
         specifier: workspace:*
         version: link:../config

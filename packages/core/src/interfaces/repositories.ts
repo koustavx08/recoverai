@@ -19,6 +19,8 @@ import type { Transaction } from "../domain/transaction.js";
 export interface TransactionRepository {
   findById(id: TransactionId): Promise<Transaction | null>;
   findByMerchant(merchantId: MerchantId): Promise<readonly Transaction[]>;
+  /** Every transaction in the store, across merchants — used by batch analysis, which is not merchant-scoped. */
+  findAll(): Promise<readonly Transaction[]>;
   save(transaction: Transaction): Promise<void>;
 }
 

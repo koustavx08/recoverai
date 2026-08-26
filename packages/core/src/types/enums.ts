@@ -19,16 +19,25 @@ export type FailureReasonCode =
   | "insufficient_funds"
   | "expired_card"
   | "invalid_card"
+  | "invalid_payment_details"
   | "upi_failure"
   | "network_timeout"
   | "processor_error"
   | "risk_blocked"
   | "customer_abandoned"
   | "authentication_failed"
+  | "duplicate_attempt"
   | "unknown";
 
 /** Priority tier assigned to a revenue-risk assessment. */
 export type RiskPriority = "critical" | "high" | "medium" | "low";
+
+/**
+ * Qualitative severity of a payment failure, independent of the
+ * transaction's monetary value — how bad the failure itself is, not how
+ * much money is attached to it.
+ */
+export type FailureSeverity = "low" | "medium" | "high" | "critical";
 
 /** Category of strategy the system can recommend to recover lost revenue. */
 export type RecoveryStrategyType =

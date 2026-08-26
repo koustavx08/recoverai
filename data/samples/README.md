@@ -29,10 +29,24 @@ The shape of each record intentionally mirrors the domain types in
 these are plain JSON files, not branded/typed values — a loader is
 responsible for validating and converting them.
 
+- `transactions.csv` — 10 sample transactions in the "flat" ingestion
+  shape (one row per transaction, no nested attempts — see
+  `@recoverai/analysis`'s `NormalizedTransaction`). Demonstrates the CSV
+  ingestion path (`recoverai ingest --file data/samples/transactions.csv`)
+  independently of the richer JSON fixture above.
+
+Ingest either file directly:
+
+```bash
+recoverai ingest --file data/samples/transactions.json
+recoverai ingest --file data/samples/transactions.csv
+recoverai analyze --file data/samples/transactions.json
+```
+
 To generate a larger, still-deterministic dataset, run:
 
 ```bash
-pnpm generate:data -- --count 200
+pnpm generate:data -- --count 10000 --seed 42
 ```
 
 which writes to `data/generated/` (gitignored).
