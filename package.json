@@ -23,7 +23,8 @@
     "clean": "pnpm -r --if-present clean && rimraf node_modules",
     "recoverai": "node packages/cli/dist/index.js",
     "generate:data": "tsx scripts/generate-sample-data.ts",
-    "evaluate:diagnosis": "tsx scripts/evaluate-diagnosis.ts"
+    "evaluate:diagnosis": "tsx scripts/evaluate-diagnosis.ts",
+    "evaluate:strategy": "tsx scripts/evaluate-strategy.ts"
   },
   "devDependencies": {
     "@recoverai/agents": "workspace:*",
