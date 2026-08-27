@@ -25,7 +25,8 @@
     "generate:data": "tsx scripts/generate-sample-data.ts",
     "evaluate:diagnosis": "tsx scripts/evaluate-diagnosis.ts",
     "evaluate:strategy": "tsx scripts/evaluate-strategy.ts",
-    "evaluate:recovery": "tsx scripts/evaluate-recovery.ts"
+    "evaluate:recovery": "tsx scripts/evaluate-recovery.ts",
+    "evaluate:pipeline": "tsx scripts/evaluate-pipeline.ts"
   },
   "devDependencies": {
     "@recoverai/agents": "workspace:*",
