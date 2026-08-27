@@ -1,16 +1,20 @@
-import type { FailureReason, RevenueRisk, Transaction } from "@recoverai/core";
-import type { AgentContext, AgentOutcome } from "./types.js";
+import type { PrioritizationResult } from "../prioritization/schema.js";
+import type { PrioritizationInput } from "../prioritization/types.js";
+import type { AgentContext } from "./types.js";
+
+export interface PrioritizationOutcome {
+  readonly result: PrioritizationResult;
+  readonly meta: { readonly latencyMs: number };
+}
 
 /**
- * Stage 3: scores and ranks an at-risk transaction — how much revenue is
- * at stake and how likely it is to be recoverable — producing the
- * `RevenueRisk` assessment consumed by the strategy stage and the UI.
+ * Stage 3: explains and packages the already-computed deterministic risk
+ * score into a bounded, auditable priority tier + factor list. Never
+ * recomputes the underlying score — see
+ * `../prioritization/deterministic-prioritization-agent.ts` for the
+ * concrete `DeterministicPrioritizationAgent` implementation.
  */
 export interface PrioritizationAgent {
   readonly id: string;
-  prioritize(
-    transaction: Transaction,
-    failureReason: FailureReason,
-    context: AgentContext,
-  ): Promise<AgentOutcome<RevenueRisk>>;
+  prioritize(input: PrioritizationInput, context: AgentContext): Promise<PrioritizationOutcome>;
 }

@@ -1,19 +1,20 @@
-import type { Transaction } from "@recoverai/core";
-import type { AgentContext, AgentOutcome } from "./types.js";
+import type { DetectionResult } from "../detection/schema.js";
+import type { DetectionInput } from "../detection/types.js";
+import type { AgentContext } from "./types.js";
 
-export interface DetectionResult {
-  /** Whether this transaction represents revenue at risk worth analyzing further. */
-  readonly isAtRisk: boolean;
+export interface DetectionOutcome {
+  readonly result: DetectionResult;
+  readonly meta: { readonly latencyMs: number };
 }
 
 /**
  * Stage 1: scans an incoming transaction and decides whether it represents
- * a revenue-loss event that the rest of the pipeline should process.
+ * a revenue-loss event the rest of the pipeline should process now
+ * (`detected` + `actionable`). Deterministic — see
+ * `../detection/deterministic-detection-agent.ts` for the concrete
+ * `DeterministicDetectionAgent` implementation.
  */
 export interface DetectionAgent {
   readonly id: string;
-  detect(
-    transaction: Transaction,
-    context: AgentContext,
-  ): Promise<AgentOutcome<DetectionResult>>;
+  detect(input: DetectionInput, context: AgentContext): Promise<DetectionOutcome>;
 }
