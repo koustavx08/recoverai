@@ -12,7 +12,9 @@ const PIPELINE_STAGES = [
   "Facts Extracted",
   "Evidence Generated",
   "Diagnosis",
-  "Bounded Recommendation",
+  "Risk Context",
+  "Allowed Strategies",
+  "Selected Strategy",
 ];
 
 interface DiagnosisPageProps {
@@ -24,8 +26,18 @@ export default async function DiagnosisPage({ params }: DiagnosisPageProps) {
   const view = await loadTransactionDiagnosis(transactionId);
   if (!view) notFound();
 
-  const { transaction, failureReason, risk, amount, outcome } = view;
+  const {
+    transaction,
+    failureReason,
+    risk,
+    amount,
+    outcome,
+    strategyOutcome,
+    allowedStrategies,
+    strategyConstraints,
+  } = view;
   const { diagnosis, meta } = outcome;
+  const { decision, meta: strategyMeta } = strategyOutcome;
 
   return (
     <>
@@ -150,7 +162,7 @@ export default async function DiagnosisPage({ params }: DiagnosisPageProps) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Audit metadata</CardTitle>
+              <CardTitle>Audit metadata — diagnosis</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
               <Row label="Mode" value={meta.mode} />
@@ -169,10 +181,95 @@ export default async function DiagnosisPage({ params }: DiagnosisPageProps) {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Strategy selection</CardTitle>
+              <Badge variant={strategyMeta.mode === "llm" ? "accent" : "neutral"}>
+                {strategyMeta.mode === "llm" ? "AI GENERATED" : "DETERMINISTIC FALLBACK"}
+              </Badge>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2 text-sm">
+                  <Row label="Allowed strategies" value={allowedStrategies.join(", ")} />
+                  <Row label="Selected strategy" value={decision.strategy} />
+                  <Row label="Confidence" value={`${Math.round(decision.confidence * 100)}%`} />
+                  <Row
+                    label="Approval requirement"
+                    value={decision.requiresHumanApproval ? "Human approval required" : "Not required"}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  {decision.requiresHumanApproval ? (
+                    <Badge variant="warning" className="w-fit">
+                      requires human approval
+                    </Badge>
+                  ) : (
+                    <Badge variant="success" className="w-fit">
+                      no approval required
+                    </Badge>
+                  )}
+                  {strategyConstraints.length > 0 ? (
+                    <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      {strategyConstraints.map((constraint) => (
+                        <li key={constraint}>- {constraint}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-sm font-medium text-foreground">Why this strategy</p>
+                <p className="text-sm text-muted-foreground">{decision.rationale}</p>
+              </div>
+
+              <div>
+                <p className="mb-1 text-sm font-medium text-foreground">Expected outcome</p>
+                <p className="text-sm text-muted-foreground">{decision.expectedOutcome}</p>
+              </div>
+
+              {decision.limitations.length > 0 ? (
+                <div>
+                  <p className="mb-1 text-sm font-medium text-foreground">Limitations</p>
+                  <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                    {decision.limitations.map((limitation) => (
+                      <li key={limitation} className="flex gap-2">
+                        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                        <span>{limitation}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Audit metadata — strategy</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+              <Row label="Mode" value={strategyMeta.mode} />
+              <Row label="Provider" value={strategyMeta.provider ?? "—"} />
+              <Row label="Model" value={strategyMeta.model ?? "—"} />
+              <Row label="Latency" value={`${strategyMeta.latencyMs}ms`} />
+              <Row label="Validation" value={strategyMeta.validationSuccess ? "passed" : "failed"} />
+              <Row label="Fallback used" value={strategyMeta.fallbackUsed ? "yes" : "no"} />
+              <Row label="Agent" value={decision.metadata.agentVersion} />
+              <Row label="Generated at" value={decision.metadata.generatedAt} />
+              {strategyMeta.fallbackReason ? (
+                <div className="col-span-2 sm:col-span-4">
+                  <Row label="Fallback reason" value={strategyMeta.fallbackReason} />
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <p className="text-xs text-muted-foreground">
-            This is a structured diagnosis and bounded recommendation only — produced by a
-            decision-support agent, not an execution agent. No payment, refund, notification, or
-            retry has been executed, and no money has been recovered.
+            This is a structured diagnosis and a bounded strategy recommendation only — produced
+            by decision-support agents, never an execution agent. No payment, refund,
+            notification, or retry has been executed, and no money has been recovered.
           </p>
         </div>
       </main>
