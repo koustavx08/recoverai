@@ -1,24 +1,38 @@
 import { notFound } from "next/navigation";
-import { ArrowRight, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
+import { StageTracker, type StageStatus, type StageTrackerItem } from "@/components/pipeline/stage-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { loadTransactionDiagnosis } from "@/lib/diagnosis";
+import { loadTransactionDiagnosis, type TransactionDiagnosisView } from "@/lib/diagnosis";
 import { formatMoney } from "@/lib/format";
 import { FAILURE_LABELS } from "@/lib/labels";
+import type { RecoveryOutcome } from "@recoverai/core";
 
-const PIPELINE_STAGES = [
-  "Payment Failed",
-  "Facts Extracted",
-  "Evidence Generated",
-  "Diagnosis",
-  "Risk Context",
-  "Allowed Strategies",
-  "Selected Strategy",
-  "Execution Plan",
-  "Simulation",
-  "Verification",
-];
+const EXECUTION_OUTCOME_TO_STAGE_STATUS: Readonly<Record<RecoveryOutcome, StageStatus>> = {
+  success: "success",
+  failure: "danger",
+  pending: "warning",
+  blocked: "warning",
+  not_executed: "neutral",
+};
+
+/** This page always runs the full diagnose → strategize → simulate → verify
+ * chain for one already-selected candidate transaction (unlike the batch
+ * pipeline, it never stops early at Detection) — every stage here is real,
+ * so only the last two stages' color needs to reflect what actually
+ * happened, not whether they ran. */
+function buildDiagnosisPageStageItems(view: TransactionDiagnosisView): readonly StageTrackerItem[] {
+  const executionStatus = EXECUTION_OUTCOME_TO_STAGE_STATUS[view.executionOutcome.result.outcome];
+  const verified = view.verificationOutcome.verification.verified;
+  return [
+    { key: "detection", label: "Detected", status: "done" },
+    { key: "diagnosis", label: "Diagnosed", status: "done" },
+    { key: "strategy", label: "Strategized", status: "done" },
+    { key: "execution", label: "Simulated", status: executionStatus },
+    { key: "verification", label: "Verified", status: verified ? "success" : "danger" },
+  ];
+}
 
 const OUTCOME_BADGE_VARIANT: Readonly<Record<string, "success" | "danger" | "warning" | "neutral">> = {
   success: "success",
@@ -64,17 +78,8 @@ export default async function DiagnosisPage({ params }: DiagnosisPageProps) {
       <main className="flex-1 overflow-y-auto p-6">
         <div className="flex flex-col gap-6">
           <Card>
-            <CardContent className="flex flex-wrap items-center gap-2 p-4 text-xs text-muted-foreground">
-              {PIPELINE_STAGES.map((stage, index) => (
-                <div key={stage} className="flex items-center gap-2">
-                  <span className="rounded-full border border-border bg-muted px-2 py-1 font-medium text-foreground">
-                    {stage}
-                  </span>
-                  {index < PIPELINE_STAGES.length - 1 ? (
-                    <ArrowRight className="h-3 w-3" />
-                  ) : null}
-                </div>
-              ))}
+            <CardContent className="p-4">
+              <StageTracker items={buildDiagnosisPageStageItems(view)} />
             </CardContent>
           </Card>
 

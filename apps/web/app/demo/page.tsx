@@ -1,10 +1,12 @@
 import { CheckCircle2, PlayCircle, ShieldAlert } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { EmptyState } from "@/components/empty-state";
+import { StageTracker } from "@/components/pipeline/stage-tracker";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadDemoScenarios, type DemoScenarioView } from "@/lib/demo";
 import { formatMoney } from "@/lib/format";
+import { buildPipelineStageItems } from "@/lib/pipeline-stages";
 import type { PipelineStatus } from "@recoverai/agents";
 
 export default async function DemoPage() {
@@ -40,6 +42,18 @@ export default async function DemoPage() {
               </CardContent>
             </Card>
 
+            <nav className="flex flex-wrap gap-2" aria-label="Jump to scenario">
+              {view.scenarios.map((scenario) => (
+                <a
+                  key={scenario.id}
+                  href={`#${scenario.id}`}
+                  className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-accent/40 hover:text-accent"
+                >
+                  {scenario.title}
+                </a>
+              ))}
+            </nav>
+
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {view.scenarios.map((scenario) => (
                 <ScenarioCard key={scenario.id} scenario={scenario} />
@@ -63,7 +77,7 @@ function ScenarioCard({ scenario }: { scenario: DemoScenarioView }) {
   const { result } = scenario;
 
   return (
-    <Card>
+    <Card id={scenario.id} className="scroll-mt-6">
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
         <div className="flex flex-col gap-1">
           <CardTitle>{scenario.title}</CardTitle>
@@ -75,6 +89,8 @@ function ScenarioCard({ scenario }: { scenario: DemoScenarioView }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">{scenario.narrative}</p>
+
+        <StageTracker items={buildPipelineStageItems(result)} />
 
         <ol className="flex flex-col gap-2 border-l border-border pl-4">
           <StageRow label="Detection">
