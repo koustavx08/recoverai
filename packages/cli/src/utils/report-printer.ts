@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { AnalysisResult, IngestionSummary } from "@recoverai/analysis";
 import type { FailureReasonCode, TransactionStatus } from "@recoverai/core";
-import type { DiagnosedResult, StrategizedResult } from "../services/types.js";
+import type { DiagnosedResult, RecoveredResult, StrategizedResult } from "../services/types.js";
 import { formatCount, formatMoney } from "./format.js";
 
 const STATUS_LABELS: Readonly<Record<TransactionStatus, string>> = {
@@ -289,6 +289,75 @@ export function printStrategyJson(result: StrategizedResult): void {
         recoverabilityScore: result.recoverabilityScore,
         decision: result.decision,
         meta: result.meta,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+const OUTCOME_LABELS: Readonly<Record<string, string>> = {
+  success: "SUCCESS (simulated)",
+  failure: "FAILURE (simulated)",
+  pending: "PENDING (requires human approval)",
+  blocked: "BLOCKED (policy)",
+  not_executed: "NOT EXECUTED",
+};
+
+export function printRecovery(result: RecoveredResult): void {
+  const { execution, verification, decision } = result;
+  const out: string[] = [];
+
+  out.push("RECOVERY EXECUTION");
+  out.push("");
+  out.push("Mode:");
+  out.push("  SIMULATION");
+  out.push("");
+  out.push("  No real payment provider connected. No real Razorpay action occurred.");
+  out.push("");
+  out.push(line("Transaction:", result.transactionId, 22));
+  out.push(line("Diagnosis:", result.diagnosis.category, 22));
+  out.push(line("Strategy:", decision.strategy, 22));
+  out.push(line("Action:", execution.action, 22));
+  out.push("");
+  out.push("Execution:");
+  out.push(line("Outcome:", OUTCOME_LABELS[execution.outcome] ?? execution.outcome, 22));
+  if (execution.blockedReason) out.push(line("Blocked reason:", execution.blockedReason, 22));
+  out.push("");
+
+  if (execution.outcome === "success") {
+    out.push("SIMULATED RECOVERY:");
+    out.push(`  ${formatMoney(execution.recoveredAmount)}`);
+  } else {
+    out.push("SIMULATED RECOVERY:");
+    out.push(`  ${formatMoney(execution.recoveredAmount)} (no recovery — outcome was "${execution.outcome}")`);
+  }
+  out.push("");
+
+  out.push("Verification:");
+  out.push(`  ${verification.verified ? "PASSED" : "FAILED"}`);
+  if (verification.reasons.length > 0) {
+    for (const reason of verification.reasons) out.push(`  - ${reason}`);
+  }
+  out.push("");
+  out.push(`Audit: executionId=${execution.executionId}`);
+  out.push("");
+  out.push("No real money was moved. All figures above are SIMULATED.");
+
+  console.info(out.join("\n"));
+}
+
+export function printRecoveryJson(result: RecoveredResult): void {
+  console.info(
+    JSON.stringify(
+      {
+        transactionId: result.transactionId,
+        diagnosis: result.diagnosis,
+        decision: result.decision,
+        execution: result.execution,
+        executionMeta: result.executionMeta,
+        verification: result.verification,
+        simulated: true,
       },
       null,
       2,

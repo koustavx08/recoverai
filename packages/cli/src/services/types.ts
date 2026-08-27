@@ -2,6 +2,9 @@ import type { IngestionSummary, AnalysisResult } from "@recoverai/analysis";
 import type {
   Diagnosis,
   DiagnosisExecutionMeta,
+  RecoveryExecutionMeta,
+  RecoveryExecutionResult,
+  RecoveryVerificationResult,
   StrategyDecision,
   StrategyExecutionMeta,
 } from "@recoverai/agents";
@@ -64,6 +67,18 @@ export interface StrategizedResult {
   readonly json: boolean;
 }
 
+export interface RecoveredResult {
+  readonly status: "recovered";
+  readonly command: "recover";
+  readonly transactionId: string;
+  readonly diagnosis: Diagnosis;
+  readonly decision: StrategyDecision;
+  readonly execution: RecoveryExecutionResult;
+  readonly executionMeta: RecoveryExecutionMeta;
+  readonly verification: RecoveryVerificationResult;
+  readonly json: boolean;
+}
+
 export type CommandResult =
   | NotImplementedResult
   | OkResult
@@ -71,7 +86,8 @@ export type CommandResult =
   | IngestedResult
   | AnalyzedResult
   | DiagnosedResult
-  | StrategizedResult;
+  | StrategizedResult
+  | RecoveredResult;
 
 export function notImplemented(
   command: CommandName,
