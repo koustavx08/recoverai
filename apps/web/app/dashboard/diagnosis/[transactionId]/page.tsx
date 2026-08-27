@@ -15,7 +15,18 @@ const PIPELINE_STAGES = [
   "Risk Context",
   "Allowed Strategies",
   "Selected Strategy",
+  "Execution Plan",
+  "Simulation",
+  "Verification",
 ];
+
+const OUTCOME_BADGE_VARIANT: Readonly<Record<string, "success" | "danger" | "warning" | "neutral">> = {
+  success: "success",
+  failure: "danger",
+  pending: "warning",
+  blocked: "warning",
+  not_executed: "neutral",
+};
 
 interface DiagnosisPageProps {
   readonly params: Promise<{ transactionId: string }>;
@@ -35,9 +46,14 @@ export default async function DiagnosisPage({ params }: DiagnosisPageProps) {
     strategyOutcome,
     allowedStrategies,
     strategyConstraints,
+    executionOutcome,
+    verificationOutcome,
+    simulationProfile,
   } = view;
   const { diagnosis, meta } = outcome;
   const { decision, meta: strategyMeta } = strategyOutcome;
+  const { result: execution, meta: executionMeta } = executionOutcome;
+  const { verification } = verificationOutcome;
 
   return (
     <>
@@ -266,10 +282,97 @@ export default async function DiagnosisPage({ params }: DiagnosisPageProps) {
             </CardContent>
           </Card>
 
+          <Card className="border-2 border-warning/40">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Recovery execution</CardTitle>
+              <Badge variant="warning" className="uppercase">
+                Simulation mode
+              </Badge>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <p className="rounded border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
+                No real payment provider is connected. No real Razorpay action occurs. Every
+                figure below is a <strong>SIMULATED</strong> outcome, computed by a deterministic,
+                seeded simulator — never a claim of actual recovered revenue.
+              </p>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2 text-sm">
+                  <Row label="Mapped action" value={execution.action} />
+                  <Row label="Outcome" value={execution.outcome} />
+                  <Row label="Simulated recovery" value={`${formatMoney(execution.recoveredAmount)} (SIMULATED)`} />
+                  {execution.blockedReason ? (
+                    <Row label="Blocked reason" value={execution.blockedReason} />
+                  ) : null}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Badge
+                    variant={OUTCOME_BADGE_VARIANT[execution.outcome] ?? "neutral"}
+                    className="w-fit uppercase"
+                  >
+                    {execution.outcome.replace(/_/g, " ")}
+                  </Badge>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1 text-sm font-medium text-foreground">
+                  Simulation estimate: {Math.round(simulationProfile.probabilityOfSuccess * 100)}%
+                  (not a real-world prediction)
+                </p>
+                <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  {simulationProfile.factors.map((factor) => (
+                    <li key={factor}>- {factor}</li>
+                  ))}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Verification</CardTitle>
+              <Badge variant={verification.verified ? "success" : "danger"} className="uppercase">
+                {verification.verified ? "Passed" : "Failed"}
+              </Badge>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                Independently re-checked for internal consistency — never trusting the recovery
+                agent&apos;s own report.
+              </p>
+              {verification.reasons.length > 0 ? (
+                <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                  {verification.reasons.map((reason) => (
+                    <li key={reason} className="flex gap-2">
+                      <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+                      <span>{reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Audit metadata — execution &amp; verification</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+              <Row label="Simulation mode" value={String(execution.simulationMode)} />
+              <Row label="Execution latency" value={`${executionMeta.latencyMs}ms`} />
+              <Row label="Execution ID" value={execution.executionId} mono />
+              <Row label="Executed at" value={execution.executedAt} />
+              <Row label="Verified" value={verification.verified ? "yes" : "no"} />
+              <Row label="Verified at" value={verification.checkedAt} />
+            </CardContent>
+          </Card>
+
           <p className="text-xs text-muted-foreground">
-            This is a structured diagnosis and a bounded strategy recommendation only — produced
-            by decision-support agents, never an execution agent. No payment, refund,
-            notification, or retry has been executed, and no money has been recovered.
+            This page shows a structured diagnosis, a bounded strategy recommendation, and a
+            SIMULATED recovery execution — never a live payment action. No payment, refund,
+            notification, or retry has actually been executed, and no real money has been
+            recovered.
           </p>
         </div>
       </main>

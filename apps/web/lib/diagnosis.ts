@@ -8,17 +8,28 @@ import {
   type NormalizedTransaction,
 } from "@recoverai/analysis";
 import {
+  DeterministicVerificationAgent,
   GroundedDiagnosisAgent,
   GroundedStrategyAgent,
+  SimulatedRecoveryAgent,
   buildStrategyPolicyContext,
+  computeSimulationProfile,
   type DiagnosisInput,
   type DiagnosisOutcome,
+  type RecoveryExecutionOutcome,
+  type RecoveryExecutionRequest,
+  type RecoveryVerificationOutcome,
+  type SimulationProfile,
   type StrategyInput,
   type StrategyOutcome,
 } from "@recoverai/agents";
 import { loadConfig } from "@recoverai/config";
 import { createInMemoryDatabase } from "@recoverai/database";
-import { AnthropicProvider, type AIModelProvider } from "@recoverai/integrations";
+import {
+  AnthropicProvider,
+  RecoveryExecutionSimulator,
+  type AIModelProvider,
+} from "@recoverai/integrations";
 import type {
   FailureReason,
   Logger,
@@ -46,6 +57,9 @@ export interface TransactionDiagnosisView {
   readonly allowedStrategies: readonly RecoveryStrategyType[];
   readonly strategyConstraints: readonly string[];
   readonly hasSucceededWithAlternateMethod: boolean;
+  readonly executionOutcome: RecoveryExecutionOutcome;
+  readonly verificationOutcome: RecoveryVerificationOutcome;
+  readonly simulationProfile: SimulationProfile;
 }
 
 function resolveProvider(): AIModelProvider | null {
@@ -141,6 +155,34 @@ export async function loadTransactionDiagnosis(
     // candidate set the UI, not just the one the agent picked.
     const policy = buildStrategyPolicyContext(strategyInput);
 
+    const executionRequest: RecoveryExecutionRequest = {
+      transactionId: transaction.id,
+      amount: transaction.amount,
+      paymentMethod: transaction.paymentMethod,
+      attemptCount: transaction.attemptCount,
+      diagnosis: outcome.diagnosis,
+      strategyDecision: strategyOutcome.decision,
+      expectedRecoveryAmount: risk.expectedRecoveryAmount,
+      hasSucceededWithAlternateMethod: altMethod,
+      executionContext: { simulationMode: true },
+    };
+    // Computed independently of whether the simulator actually ran (e.g. a
+    // blocked/pending outcome never reaches it) purely so the UI can always
+    // show the simulation estimate and its factors, for transparency.
+    const simulationProfile = computeSimulationProfile(executionRequest);
+
+    const recoveryAgent = new SimulatedRecoveryAgent({
+      simulationProvider: new RecoveryExecutionSimulator(),
+    });
+    const executionOutcome = await recoveryAgent.executeRecovery(executionRequest, {
+      logger: consoleLogger,
+    });
+
+    const verificationAgent = new DeterministicVerificationAgent();
+    const verificationOutcome = await verificationAgent.verifyRecovery(executionOutcome.result, {
+      logger: consoleLogger,
+    });
+
     return {
       transaction,
       failureReason,
@@ -151,6 +193,9 @@ export async function loadTransactionDiagnosis(
       allowedStrategies: policy.allowedStrategies,
       strategyConstraints: policy.constraints,
       hasSucceededWithAlternateMethod: altMethod,
+      executionOutcome,
+      verificationOutcome,
+      simulationProfile,
     };
   } catch {
     return null;
