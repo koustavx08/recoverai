@@ -39,13 +39,19 @@ export type RiskPriority = "critical" | "high" | "medium" | "low";
  */
 export type FailureSeverity = "low" | "medium" | "high" | "critical";
 
-/** Category of strategy the system can recommend to recover lost revenue. */
+/**
+ * Category of strategy the system can recommend to recover lost revenue.
+ * Bounded and closed by design — a `StrategyAgent` (see `@recoverai/agents`)
+ * may only select from this set, never invent a new action name.
+ */
 export type RecoveryStrategyType =
   | "retry_payment"
   | "send_payment_link"
   | "switch_payment_method"
   | "offer_installments"
   | "manual_followup"
+  | "wait_and_retry"
+  | "manual_review"
   | "no_action";
 
 /** Concrete, executable action derived from a recovery strategy. */
