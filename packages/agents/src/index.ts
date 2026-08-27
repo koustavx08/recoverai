@@ -3,15 +3,18 @@
  *
  * Contracts for the Detection -> Diagnosis -> Prioritization -> Strategy ->
  * Recovery -> Verification agent pipeline, plus a thin orchestration layer.
- * The Diagnosis and Strategy Selection stages are implemented (see
- * ./diagnosis/ — GroundedDiagnosisAgent, and ./strategy/ —
- * GroundedStrategyAgent, both LLM-assisted with a deterministic fallback);
- * every other stage still throws AgentNotImplementedError via
- * RecoveryPipeline. Neither implemented agent executes any action — they
- * only produce structured, auditable decisions.
+ * Diagnosis, Strategy Selection, Recovery Execution, and Verification are
+ * all implemented: ./diagnosis/ (GroundedDiagnosisAgent) and ./strategy/
+ * (GroundedStrategyAgent) are LLM-assisted with a deterministic fallback;
+ * ./recovery/ (SimulatedRecoveryAgent, DeterministicVerificationAgent) is
+ * fully deterministic and simulation-only — every recovery execution in
+ * this phase is labeled `simulationMode: true` and no code path here can
+ * move real money or call a real payment provider. Detection and
+ * Prioritization still throw AgentNotImplementedError via RecoveryPipeline.
  */
 export * from "./agents/index.js";
 export * from "./orchestration/index.js";
 export * from "./tools/index.js";
 export * from "./diagnosis/index.js";
 export * from "./strategy/index.js";
+export * from "./recovery/index.js";
