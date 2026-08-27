@@ -68,6 +68,19 @@ export type RecoveryActionType =
 export type RecoveryActionStatus =
   "pending" | "in_progress" | "succeeded" | "failed" | "skipped" | "cancelled";
 
+/**
+ * Bounded outcome of one recovery execution attempt (see
+ * `@recoverai/agents`' `RecoveryAgent`). `blocked` means the deterministic
+ * execution policy refused to run it (e.g. non-retryable, retry limit
+ * reached, requires human approval it doesn't have); `not_executed` means
+ * the strategy itself calls for no action (e.g. `no_action`); `pending`
+ * means the action was handed off for a human step (e.g. a manual
+ * follow-up) and has no resolved success/failure yet. Every execution in
+ * the current phase is a simulation — see `RecoveryExecutionResult.
+ * simulationMode` — never a real payment action.
+ */
+export type RecoveryOutcome = "success" | "failure" | "pending" | "blocked" | "not_executed";
+
 /** The stage of the agent pipeline that produced an AgentDecision. */
 export type AgentDecisionStage =
   | "detection"
