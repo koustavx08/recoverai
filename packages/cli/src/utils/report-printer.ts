@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import type { AnalysisResult, IngestionSummary } from "@recoverai/analysis";
 import type { FailureReasonCode, TransactionStatus } from "@recoverai/core";
+import type { DiagnosedResult } from "../services/types.js";
 import { formatCount, formatMoney } from "./format.js";
 
 const STATUS_LABELS: Readonly<Record<TransactionStatus, string>> = {
@@ -135,4 +136,80 @@ export function printAnalysisTable(result: AnalysisResult): void {
 
 export function printAnalysisJson(result: AnalysisResult): void {
   console.info(JSON.stringify(result, null, 2));
+}
+
+function describeMode(result: DiagnosedResult): string {
+  const { meta } = result;
+  if (meta.mode === "llm") {
+    return `AI-assisted (provider: ${meta.provider ?? "unknown"}, model: ${meta.model ?? "unknown"})`;
+  }
+  return meta.fallbackReason
+    ? `Deterministic fallback (${meta.fallbackReason})`
+    : "Deterministic fallback";
+}
+
+export function printDiagnosis(result: DiagnosedResult): void {
+  const { diagnosis } = result;
+  const out: string[] = [];
+
+  out.push("RecoverAI Diagnosis Agent");
+  out.push("");
+  out.push(line("Transaction:", result.transactionId, 24));
+  out.push(line("Amount:", formatMoney(result.amount), 24));
+  out.push(line("Failure:", FAILURE_LABELS[result.failureCode], 24));
+  out.push("");
+  out.push(line("Diagnosis category:", diagnosis.category, 24));
+  out.push(line("Recoverability:", diagnosis.recoverabilityAssessment, 24));
+  out.push(line("Confidence:", `${Math.round(diagnosis.confidence * 100)}%`, 24));
+  out.push(
+    line(
+      "Retry recommended:",
+      diagnosis.retryRecommendation.recommended
+        ? `yes (up to ${diagnosis.retryRecommendation.maxAttempts} more attempt(s))`
+        : "no",
+      24,
+    ),
+  );
+  out.push(line("Eligible interventions:", diagnosis.interventionEligibility.join(", "), 24));
+  out.push("");
+  out.push("Why:");
+  out.push(`  ${diagnosis.explanation}`);
+  out.push("");
+  out.push("Evidence:");
+  for (const item of diagnosis.evidence) {
+    out.push(`  - [${item.id}] ${item.fact}`);
+  }
+
+  if (diagnosis.limitations.length > 0) {
+    out.push("");
+    out.push("Uncertainty / limitations:");
+    for (const limitation of diagnosis.limitations) {
+      out.push(`  - ${limitation}`);
+    }
+  }
+
+  out.push("");
+  out.push(`Mode: ${describeMode(result)}`);
+  out.push("");
+  out.push(
+    'Note: this is a structured diagnosis and bounded recommendation only. No action has been executed and no money has been recovered.',
+  );
+
+  console.info(out.join("\n"));
+}
+
+export function printDiagnosisJson(result: DiagnosedResult): void {
+  console.info(
+    JSON.stringify(
+      {
+        transactionId: result.transactionId,
+        amount: result.amount,
+        failureCode: result.failureCode,
+        diagnosis: result.diagnosis,
+        meta: result.meta,
+      },
+      null,
+      2,
+    ),
+  );
 }

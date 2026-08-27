@@ -1,4 +1,6 @@
 import type { IngestionSummary, AnalysisResult } from "@recoverai/analysis";
+import type { Diagnosis, DiagnosisExecutionMeta } from "@recoverai/agents";
+import type { FailureReasonCode, Money } from "@recoverai/core";
 
 export type CommandName =
   "init" | "ingest" | "analyze" | "simulate" | "recover" | "report" | "agent";
@@ -34,8 +36,24 @@ export interface AnalyzedResult {
   readonly json: boolean;
 }
 
+export interface DiagnosedResult {
+  readonly status: "diagnosed";
+  readonly command: "agent";
+  readonly transactionId: string;
+  readonly amount: Money;
+  readonly failureCode: FailureReasonCode;
+  readonly diagnosis: Diagnosis;
+  readonly meta: DiagnosisExecutionMeta;
+  readonly json: boolean;
+}
+
 export type CommandResult =
-  NotImplementedResult | OkResult | ErrorResult | IngestedResult | AnalyzedResult;
+  | NotImplementedResult
+  | OkResult
+  | ErrorResult
+  | IngestedResult
+  | AnalyzedResult
+  | DiagnosedResult;
 
 export function notImplemented(
   command: CommandName,
