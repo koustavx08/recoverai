@@ -1,4 +1,4 @@
-import { CheckCircle2, PlayCircle, ShieldAlert } from "lucide-react";
+import { Ban, CheckCircle2, Clock, PlayCircle, ShieldAlert, UserCheck, Zap } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { EmptyState } from "@/components/empty-state";
 import { StageTracker } from "@/components/pipeline/stage-tracker";
@@ -42,6 +42,38 @@ export default async function DemoPage() {
               </CardContent>
             </Card>
 
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                RecoverAI doesn&apos;t try to recover every payment — it decides
+              </p>
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                <DecisionTile
+                  icon={Zap}
+                  label="Act"
+                  description="Diagnosed, planned, and simulated automatically."
+                  href="#demo_txn_01"
+                />
+                <DecisionTile
+                  icon={Clock}
+                  label="Wait"
+                  description="Plan is ready, but a human must approve first."
+                  href="#demo_txn_05"
+                />
+                <DecisionTile
+                  icon={Ban}
+                  label="Block"
+                  description="Already tried enough — refuses to keep retrying."
+                  href="#demo_txn_03"
+                />
+                <DecisionTile
+                  icon={UserCheck}
+                  label="Escalate"
+                  description="Signal too ambiguous to trust to automation."
+                  href="#demo_txn_04"
+                />
+              </div>
+            </div>
+
             <nav className="flex flex-wrap gap-2" aria-label="Jump to scenario">
               {view.scenarios.map((scenario) => (
                 <a
@@ -70,6 +102,31 @@ export default async function DemoPage() {
         )}
       </main>
     </>
+  );
+}
+
+function DecisionTile({
+  icon: Icon,
+  label,
+  description,
+  href,
+}: {
+  readonly icon: React.ComponentType<{ className?: string }>;
+  readonly label: string;
+  readonly description: string;
+  readonly href: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="flex flex-col gap-1 rounded border border-border bg-card p-3 transition-colors hover:border-accent/40"
+    >
+      <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+        <Icon className="h-4 w-4 text-accent" />
+        {label}
+      </span>
+      <span className="text-xs text-muted-foreground">{description}</span>
+    </a>
   );
 }
 
@@ -116,23 +173,27 @@ function ScenarioCard({ scenario }: { scenario: DemoScenarioView }) {
             )}
           </StageRow>
 
-          <StageRow label="Diagnosis">
+          <StageRow label="Diagnosis — why it failed">
             {result.diagnosis ? (
               <span>
-                {result.diagnosis.diagnosis.category} ·{" "}
-                {Math.round(result.diagnosis.diagnosis.confidence * 100)}% confidence ·{" "}
-                {result.diagnosis.meta.mode}
+                <strong className="text-foreground">{result.diagnosis.diagnosis.category}</strong>{" "}
+                ({Math.round(result.diagnosis.diagnosis.confidence * 100)}% confidence,{" "}
+                {result.diagnosis.meta.mode}). {result.diagnosis.diagnosis.explanation}
               </span>
             ) : (
               <Muted />
             )}
           </StageRow>
 
-          <StageRow label="Strategy">
+          <StageRow label="Strategy — why this fix">
             {result.strategy ? (
               <span>
-                {result.strategy.decision.strategy} ·{" "}
-                {result.strategy.decision.requiresHumanApproval ? "human approval required" : "no approval required"}
+                <strong className="text-foreground">{result.strategy.decision.strategy}</strong>{" "}
+                (
+                {result.strategy.decision.requiresHumanApproval
+                  ? "human approval required"
+                  : "no approval required"}
+                ). {result.strategy.decision.rationale}
               </span>
             ) : (
               <Muted />

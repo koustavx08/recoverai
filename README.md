@@ -209,8 +209,13 @@ range of real pipeline outcomes — not just the happy path:
 
 Every outcome above is produced by the real `RecoveryPipeline` — nothing
 is hand-written or scripted — and is also rendered as narrated cards on
-the `/demo` dashboard page (see [Current project status](#11-current-project-status)).
-The point of this dataset isn't "AI recovers everything" — it's that
+the `/demo` dashboard page (see [Current project status](#11-current-project-status)),
+each one showing the real diagnosis explanation and strategy rationale
+behind the decision, not just the outcome label. `/demo` opens with a
+four-tile **Act / Wait / Block / Escalate** legend, each tile linking to
+the scenario that demonstrates it, so a first-time viewer can see
+RecoverAI's actual decision framework before reading a single card. The
+point of this dataset isn't "AI recovers everything" — it's that
 RecoverAI **knows when to act, and knows when not to**.
 
 ## 7. Transaction intelligence (deterministic, not AI)
