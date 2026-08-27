@@ -1,4 +1,4 @@
-import type { FailureReasonCode, RiskPriority } from "@recoverai/core";
+import type { FailureReasonCode, RiskPriority, TransactionStatus } from "@recoverai/core";
 
 export const FAILURE_LABELS: Readonly<Record<FailureReasonCode, string>> = {
   issuer_decline: "Issuer decline",
@@ -23,4 +23,22 @@ export const PRIORITY_BADGE_VARIANT: Readonly<
   high: "warning",
   medium: "accent",
   low: "neutral",
+};
+
+export const STATUS_BADGE_VARIANT: Readonly<
+  Record<TransactionStatus, "success" | "danger" | "warning" | "neutral" | "accent">
+> = {
+  succeeded: "success",
+  failed: "danger",
+  pending: "warning",
+  refunded: "accent",
+  abandoned: "neutral",
+};
+
+export const STATUS_LABELS: Readonly<Record<TransactionStatus, string>> = {
+  succeeded: "Succeeded",
+  failed: "Failed",
+  pending: "Pending",
+  refunded: "Refunded",
+  abandoned: "Abandoned",
 };

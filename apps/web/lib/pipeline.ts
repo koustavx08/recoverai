@@ -1,31 +1,10 @@
-import { resolve } from "node:path";
-import {
-  buildCustomerHistoryIndex,
-  classifyFailure,
-  ingestFile,
-  NEUTRAL_CUSTOMER_HISTORY,
-  scoreTransaction,
-  type NormalizedTransaction,
-} from "@recoverai/analysis";
-import {
-  BatchRecoveryPipeline,
-  DeterministicDetectionAgent,
-  DeterministicPrioritizationAgent,
-  DeterministicVerificationAgent,
-  GroundedDiagnosisAgent,
-  GroundedStrategyAgent,
-  RecoveryPipeline,
-  SimulatedRecoveryAgent,
-  type BatchPipelineResult,
-  type PipelineTransactionFacts,
-  type RecoveryPipelineAgents,
-} from "@recoverai/agents";
-import { loadConfig } from "@recoverai/config";
+import { ingestFile } from "@recoverai/analysis";
+import { BatchRecoveryPipeline, RecoveryPipeline, type BatchPipelineResult } from "@recoverai/agents";
 import { createInMemoryDatabase } from "@recoverai/database";
-import { AnthropicProvider, RecoveryExecutionSimulator, type AIModelProvider } from "@recoverai/integrations";
 import type { Logger } from "@recoverai/core";
+import { buildFactsList, buildPipelineAgents, repoDataPath, resolveProvider } from "./pipeline-runtime";
 
-const SAMPLE_DATA_PATH = resolve(process.cwd(), "../../data/samples/transactions.json");
+const SAMPLE_DATA_PATH = repoDataPath("samples", "transactions.json");
 
 /** No-op-ish logger: server console only, mirrors lib/diagnosis.ts. */
 const consoleLogger: Logger = {
@@ -33,78 +12,6 @@ const consoleLogger: Logger = {
     if (level === "warn" || level === "error") console.error(`[pipeline:${level}]`, message, context ?? {});
   },
 };
-
-function resolveProvider(): AIModelProvider | null {
-  const config = loadConfig();
-  return config.ai.isConfigured && config.ai.apiKey && config.ai.model
-    ? new AnthropicProvider({ apiKey: config.ai.apiKey, model: config.ai.model })
-    : null;
-}
-
-function buildAgents(provider: AIModelProvider | null): RecoveryPipelineAgents {
-  return {
-    detection: new DeterministicDetectionAgent(),
-    diagnosis: new GroundedDiagnosisAgent({ provider }),
-    prioritization: new DeterministicPrioritizationAgent(),
-    strategy: new GroundedStrategyAgent({ provider }),
-    recovery: new SimulatedRecoveryAgent({ simulationProvider: new RecoveryExecutionSimulator() }),
-    verification: new DeterministicVerificationAgent(),
-  };
-}
-
-function hasSucceededWithAlternateMethod(
-  transactions: readonly NormalizedTransaction[],
-  transaction: NormalizedTransaction,
-): boolean {
-  return transactions.some(
-    (t) =>
-      t.customerId === transaction.customerId &&
-      t.status === "succeeded" &&
-      t.paymentMethod !== transaction.paymentMethod,
-  );
-}
-
-function buildFactsList(transactions: readonly NormalizedTransaction[]): readonly PipelineTransactionFacts[] {
-  const customerHistoryIndex = buildCustomerHistoryIndex(transactions);
-
-  return transactions.map((transaction) => {
-    const isRiskEligible = transaction.status === "failed" || transaction.status === "abandoned";
-    if (!isRiskEligible) {
-      return {
-        transactionId: transaction.id,
-        status: transaction.status,
-        amount: transaction.amount,
-        paymentMethod: transaction.paymentMethod,
-        attemptCount: transaction.attemptCount,
-      };
-    }
-
-    const failureReason = classifyFailure(transaction);
-    const customerHistory = customerHistoryIndex.get(transaction.customerId) ?? NEUTRAL_CUSTOMER_HISTORY;
-    const risk = scoreTransaction(transaction, failureReason, customerHistory, { now: new Date() });
-
-    return {
-      transactionId: transaction.id,
-      status: transaction.status,
-      amount: transaction.amount,
-      paymentMethod: transaction.paymentMethod,
-      attemptCount: transaction.attemptCount,
-      failureCode: failureReason.code,
-      failureDescription: failureReason.description,
-      retryable: failureReason.recoverable,
-      riskScore: risk.riskScore,
-      recoverabilityScore: risk.recoverabilityScore,
-      expectedRecoveryAmount: risk.expectedRecoveryAmount,
-      priority: risk.priority,
-      customerHistory: {
-        totalTransactions: customerHistory.totalTransactions,
-        successfulTransactions: customerHistory.successfulTransactions,
-        reliabilityScore: customerHistory.reliabilityScore,
-      },
-      hasSucceededWithAlternateMethod: hasSucceededWithAlternateMethod(transactions, transaction),
-    };
-  });
-}
 
 export interface PortfolioPipelineView {
   readonly file: string;
@@ -128,7 +35,7 @@ export async function loadPortfolioPipeline(): Promise<PortfolioPipelineView | n
     if (transactions.length === 0) return null;
 
     const provider = resolveProvider();
-    const agents = buildAgents(provider);
+    const agents = buildPipelineAgents(provider);
     const pipeline = new RecoveryPipeline(agents, { logger: consoleLogger });
     const batchPipeline = new BatchRecoveryPipeline(pipeline);
 

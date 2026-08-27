@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import {
   buildCustomerHistoryIndex,
   classifyFailure,
@@ -37,8 +36,9 @@ import type {
   RecoveryStrategyType,
   RevenueRisk,
 } from "@recoverai/core";
+import { repoDataPath } from "./pipeline-runtime";
 
-const SAMPLE_DATA_PATH = resolve(process.cwd(), "../../data/samples/transactions.json");
+const SAMPLE_DATA_PATH = repoDataPath("samples", "transactions.json");
 
 /** No-op logger: the web app has no CLI stderr to write diagnostic lines to yet — server console is enough for now. */
 const consoleLogger: Logger = {

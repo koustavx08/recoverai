@@ -22,3 +22,16 @@ export function formatMoney(money: Money): string {
 export function formatCount(value: number): string {
   return formatIndianGrouping(value);
 }
+
+/** Formats an ISO timestamp as a short, locale-independent date + time (e.g. "27 Aug, 09:14"). */
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
