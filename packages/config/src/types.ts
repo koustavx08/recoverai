@@ -13,7 +13,10 @@ export interface AppConfig {
     };
   };
   readonly ai: {
+    readonly provider: "anthropic";
     readonly apiKey?: string;
     readonly model?: string;
+    /** True only when both apiKey and model are set — i.e. an LLM-backed agent can actually run. */
+    readonly isConfigured: boolean;
   };
 }

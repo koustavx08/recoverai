@@ -16,6 +16,27 @@ describe("loadConfig", () => {
     expect(config.payments.razorpay).toBeUndefined();
   });
 
+  it("defaults ai.provider to anthropic and ai.isConfigured to false with no AI credentials", () => {
+    const config = loadConfig(BASE_ENV);
+    expect(config.ai.provider).toBe("anthropic");
+    expect(config.ai.isConfigured).toBe(false);
+  });
+
+  it("sets ai.isConfigured to true only once both AI_API_KEY and AI_MODEL are set", () => {
+    const onlyKey = loadConfig({
+      ...BASE_ENV,
+      AI_API_KEY: "sk-test",
+    } as unknown as NodeJS.ProcessEnv);
+    expect(onlyKey.ai.isConfigured).toBe(false);
+
+    const both = loadConfig({
+      ...BASE_ENV,
+      AI_API_KEY: "sk-test",
+      AI_MODEL: "claude-sonnet-5",
+    } as unknown as NodeJS.ProcessEnv);
+    expect(both.ai.isConfigured).toBe(true);
+  });
+
   it("throws when NODE_ENV=production and DATABASE_URL is missing", () => {
     const env = { ...BASE_ENV, NODE_ENV: "production" } as unknown as NodeJS.ProcessEnv;
     expect(() => loadConfig(env)).toThrow(ConfigValidationError);

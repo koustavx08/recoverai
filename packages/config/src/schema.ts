@@ -17,6 +17,7 @@ export const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().min(1).optional(),
   RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
 
+  AI_PROVIDER: z.enum(["anthropic"]).default("anthropic"),
   AI_API_KEY: z.string().min(1).optional(),
   AI_MODEL: z.string().min(1).optional(),
 });

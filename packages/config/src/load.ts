@@ -60,8 +60,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
           : undefined,
     },
     ai: {
+      provider: raw.AI_PROVIDER,
       apiKey: raw.AI_API_KEY,
       model: raw.AI_MODEL,
+      isConfigured: Boolean(raw.AI_API_KEY && raw.AI_MODEL),
     },
   };
 }
