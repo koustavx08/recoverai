@@ -2,21 +2,27 @@
 
 **AI-powered revenue recovery infrastructure for merchants.**
 
-> **Status: deterministic intelligence + grounded AI diagnosis + bounded
-> strategy selection + SIMULATED recovery execution. All recovery results
-> are currently simulated — no real payment action, no real Razorpay call,
-> no real money movement, anywhere in this repo.** The CLI genuinely
-> ingests transaction data (JSON or CSV), classifies why payments failed,
-> and scores revenue risk/recoverability with fixed, documented rules. A
+> **Status: a complete, closed-loop, six-stage recovery pipeline — for one
+> transaction or a batch of thousands — with every recovery outcome and
+> every portfolio metric explicitly SIMULATED. No real payment action, no
+> real Razorpay call, no real money movement, anywhere in this repo.** The
+> CLI genuinely ingests transaction data (JSON or CSV), classifies why
+> payments failed, and scores revenue risk/recoverability with fixed,
+> documented rules. A deterministic Detection stage decides what's worth
+> pursuing; a deterministic Prioritization stage explains how urgently; a
 > real Diagnosis Agent and a real Strategy Agent (both LLM-assisted via
 > Anthropic when `AI_API_KEY`/`AI_MODEL` are set, with a deterministic
 > fallback otherwise) produce structured, evidence-grounded, policy-bounded
-> output. A real, fully deterministic Recovery Agent then turns a bounded
+> output; a real, fully deterministic Recovery Agent turns a bounded
 > strategy into a policy-checked, seeded **simulation** — never a live
 > execution — and an independent Verification Agent re-checks the result
-> before anything is recorded. See [§8](#8-agent-architecture). Every
-> simulated recovery is explicitly labeled `SIMULATED`/`simulationMode:
-> true`; nothing in this repo claims real recovered revenue. See
+> before anything is recorded. `RecoveryPipeline` now orchestrates all six
+> stages end to end — for one transaction (`recoverai pipeline run
+> --transaction <id>`) or a full batch (`recoverai pipeline run --file
+> <file>`), aggregating portfolio-level metrics. See
+> [§8](#8-agent-architecture). Every simulated recovery is explicitly
+> labeled `SIMULATED`/`simulationMode: true`; nothing in this repo claims
+> real recovered revenue. See
 > [Current project status](#current-project-status) before assuming any
 > feature works end to end.
 
@@ -145,6 +151,7 @@ recoverai simulate   # exercise the pipeline via the payment simulator [not impl
 recoverai recover    # run a SIMULATED recovery execution               [implemented — simulation only]
 recoverai report     # generate a merchant-facing recovery report      [not implemented]
 recoverai agent      # run/inspect a single agent pipeline stage       [diagnosis, strategy implemented]
+recoverai pipeline   # run the full 6-stage pipeline (single or batch)  [implemented — simulation only]
 ```
 
 Every command follows the same layering: **CLI command → service → core
@@ -166,17 +173,24 @@ recoverai agent --stage strategy  --transaction txn_00002 --json
 recoverai recover --transaction txn_00002           # SIMULATED recovery execution — never live
 recoverai recover --transaction txn_00002 --seed abc --json
 recoverai recover --transaction txn_00002 --live    # rejected — no live execution path exists
+
+recoverai pipeline run --transaction txn_00002       # full 6-stage pipeline for one transaction
+recoverai pipeline run --file data/samples/transactions.json   # batch mode — every transaction in the file
+recoverai pipeline run --file data/generated/transactions.json --seed abc --json
 ```
 
-`ingest`, `analyze`, `agent`, and `recover` each start from a fresh
-in-memory store per invocation — see
+`ingest`, `analyze`, `agent`, `recover`, and `pipeline` each start from a
+fresh in-memory store per invocation — see
 [Current project status](#current-project-status) for why there's no
 cross-process persistence yet. `init`, `simulate`, `report`, and every
 `agent` stage other than `diagnosis`/`strategy` still validate their
 arguments for real but return "Not implemented yet." for the actual
-operation. `recover` always runs in simulation mode; `--live` is rejected
-outright rather than silently ignored — there is no hidden live-execution
-path anywhere in this codebase.
+operation. `recover` and `pipeline` always run in simulation mode;
+`recover --live` is rejected outright rather than silently ignored —
+there is no hidden live-execution path anywhere in this codebase.
+`pipeline run` runs in **batch mode over every transaction in the file**
+whenever `--transaction` is omitted — this is the one command that
+processes a whole file's worth of transactions in one invocation.
 
 ## 7. Transaction intelligence (deterministic, not AI)
 
@@ -204,38 +218,54 @@ revenue has actually been recovered.
 Transaction
     │
     ▼
-Detection        — is this transaction revenue at risk?           [not implemented]
+Detection        — is this transaction revenue at risk, and worth pursuing now? [implemented — DeterministicDetectionAgent]
     │
     ▼
-Diagnosis         — why did it fail, and is it recoverable?        [implemented — GroundedDiagnosisAgent]
+Prioritization    — how much is at stake, how urgently, and why?               [implemented — DeterministicPrioritizationAgent]
     │
     ▼
-Prioritization    — how much is at stake, how recoverable?         [deterministic only — @recoverai/analysis]
+Diagnosis         — why did it fail, and is it recoverable?                     [implemented — GroundedDiagnosisAgent]
     │
     ▼
-Strategy Selection — what should we try?                            [implemented — GroundedStrategyAgent]
+Strategy Selection — what should we try?                                          [implemented — GroundedStrategyAgent]
     │
     ▼
-Recovery Execution — do it, in SIMULATION only                       [implemented — SimulatedRecoveryAgent]
+Recovery Execution — do it, in SIMULATION only                                     [implemented — SimulatedRecoveryAgent]
     │
     ▼
-Verification       — did the simulated attempt look internally valid? [implemented — DeterministicVerificationAgent]
+Verification       — did the simulated attempt look internally valid?               [implemented — DeterministicVerificationAgent]
 ```
 
-Each stage is defined as a TypeScript interface in `packages/agents/src/agents`
-(`DetectionAgent`, `DiagnosisAgent`, `PrioritizationAgent`, `StrategyAgent`,
-`RecoveryAgent`, `VerificationAgent`). `packages/agents/src/orchestration`
-contains a thin `RecoveryPipeline` that wires the six stages together — its
-own methods still throw `AgentNotImplementedError` (full end-to-end
-orchestration wiring is a later phase; the CLI/web integration points call
-each implemented agent directly instead), but **Diagnosis**, **Strategy
-Selection**, **Recovery Execution**, and **Verification** are real,
-independently callable implementations — via the CLI's
-`agent --stage diagnosis|strategy`, `recover`, and the
-`/dashboard/diagnosis/[transactionId]` page — not stubs. Only Detection and
-Prioritization remain unimplemented as agents (Prioritization's logic
-exists and is used directly, via `@recoverai/analysis`'s `scoreTransaction`,
-by every caller that needs risk context).
+**All six stages are now real, implemented agents** — no stub, no
+`AgentNotImplementedError` anywhere in this pipeline. Each stage is defined
+as a TypeScript interface in `packages/agents/src/agents` (`DetectionAgent`,
+`PrioritizationAgent`, `DiagnosisAgent`, `StrategyAgent`, `RecoveryAgent`,
+`VerificationAgent`). `packages/agents/src/orchestration`'s `RecoveryPipeline`
+now genuinely wires all six together — `pipeline.run(facts)` threads each
+stage's typed output into the next stage's typed input, tracks which
+stages actually ran, and returns a structured `PipelineResult` with a
+bounded `status` (`completed` | `blocked` | `skipped` | `failed`). It never
+throws for an expected business outcome (non-retryable, a retry limit,
+`manual_review`, a failed verification) — every one of those becomes a
+`PipelineResult` with an explanatory `status`/`statusReason` instead, and
+an unexpected internal error is caught and reported the same way rather
+than propagating (so one bad transaction never aborts a batch of others).
+`BatchRecoveryPipeline` runs the pipeline sequentially over any number of
+transactions and aggregates `PortfolioMetrics` (priority/diagnosis/
+strategy/execution distributions, revenue at risk, **simulated** recovered
+amount, simulation recovery rate, verification pass rate) — see
+`recoverai pipeline run` and the `/recovery` dashboard route below.
+
+Detection and Prioritization run *before* Diagnosis in the real pipeline
+(cheaply filtering out what doesn't need the more expensive AI-capable
+stages) rather than after, as the original six-stage naming might suggest
+— Detection needs the deterministic failure classification that already
+has to run for every failed/abandoned transaction anyway, and
+Prioritization packages the risk score that Diagnosis/Strategy already
+depend on. Detection blocks non-retryable failures and exhausted retry
+limits *before* they'd otherwise reach Diagnosis's own (separately
+testable) handling of the same conditions — both layers agree, by design,
+not by accident.
 
 ### Recovery Execution: simulation only, by construction
 
@@ -277,6 +307,22 @@ and transaction value — always logged as an explainable `factors` list,
 and always labeled a "simulation estimate," never a real-world prediction.
 The same transaction + strategy + seed always reproduces the same result.
 
+### Detection and Prioritization: deterministic, no model, no re-derivation
+
+- **`DeterministicDetectionAgent`** (`packages/agents/src/detection/`) —
+  a cheap, fully deterministic gate: succeeded/pending transactions are
+  `detected: false`; refunded, non-retryable, or retry-limit-exhausted
+  ones are `detected: true, actionable: false` (recorded, not pursued);
+  everything else is `actionable: true` and proceeds. Severity is graded
+  from transaction value alone (`critical`/`high`/`medium`/`low`/`none`).
+- **`DeterministicPrioritizationAgent`** (`packages/agents/src/
+  prioritization/`) — never recomputes `riskScore`/`recoverabilityScore`/
+  `priority` (that's `@recoverai/analysis`'s `scoreTransaction()`'s job,
+  reused as-is); it only packages the already-computed priority tier into
+  a bounded, explainable `PrioritizationResult` with a deterministic
+  `factors` list (transaction value, recoverability, customer history,
+  retry headroom) and a plain-language `explanation` — never an LLM.
+
 ### Diagnosis and Strategy: the pattern both agents follow
 
 ```text
@@ -313,15 +359,19 @@ the concrete implementations, and `data/evaluation/` +
 `pnpm evaluate:diagnosis` / `pnpm evaluate:strategy` for their accuracy
 against synthetic ground-truth cases.
 
-**Diagnosis and Strategy execute nothing.** `GroundedDiagnosisAgent.
+**No stage in this pipeline executes anything real.** Detection and
+Prioritization only classify and explain; `GroundedDiagnosisAgent.
 diagnose()` and `GroundedStrategyAgent.selectStrategy()` only return
-structured data. **Recovery Execution executes nothing real either** —
-`SimulatedRecoveryAgent.executeRecovery()` only ever runs a deterministic,
-seeded simulation (see above); no payment is charged, no payment link is
-actually sent, no notification actually goes out, no real retry is
-scheduled, anywhere in this repository. See `data/evaluation/
-recovery-cases.json` + `pnpm evaluate:recovery` for its policy/simulation/
-verification accuracy against synthetic ground-truth cases.
+structured data; `SimulatedRecoveryAgent.executeRecovery()` only ever runs
+a deterministic, seeded simulation (see above). No payment is charged, no
+payment link is actually sent, no notification actually goes out, no real
+retry is scheduled, anywhere in this repository. See `data/evaluation/`
++ `pnpm evaluate:diagnosis` / `evaluate:strategy` / `evaluate:recovery` /
+`evaluate:pipeline` for each layer's accuracy against synthetic
+ground-truth cases — the last of these runs the real, complete
+`RecoveryPipeline` end to end against 50 cases and checks pipeline-level
+status correctness, policy compliance, and same-seed simulation
+consistency.
 
 ## 9. Local development setup
 
@@ -391,10 +441,18 @@ problem — it does not fail silently or fall back to defaults in production.
   implementation, `AnthropicProvider` (forces tool-based structured output,
   validates it against the caller's own Zod schema before returning; no
   free-form prose parsing).
-- `@recoverai/agents`: interfaces for all six pipeline stages, plus a
-  `RecoveryPipeline` orchestrator whose own methods still throw
-  `AgentNotImplementedError` (full end-to-end wiring is a later phase).
-  Four stages have **real, independent implementations**:
+- `@recoverai/agents`: interfaces for all six pipeline stages, **all six
+  now with real implementations**, plus `RecoveryPipeline` — a real
+  orchestrator that wires them together end to end — and
+  `BatchRecoveryPipeline`, which runs it sequentially over any number of
+  transactions and aggregates portfolio metrics:
+  - **`DeterministicDetectionAgent`** (`packages/agents/src/detection/`) —
+    a cheap, deterministic gate deciding whether a transaction is a
+    revenue-risk event worth pursuing now. No model.
+  - **`DeterministicPrioritizationAgent`** (`packages/agents/src/
+    prioritization/`) — explains and packages the already-computed
+    deterministic risk/priority signal into a bounded, auditable result
+    with a factor list. Never re-derives the underlying score. No model.
   - **`GroundedDiagnosisAgent`** (`packages/agents/src/diagnosis/`) —
     grounded, evidence-cited, LLM-assisted diagnosis with a deterministic
     fallback. See [§8](#8-agent-architecture).
@@ -424,16 +482,20 @@ problem — it does not fail silently or fall back to defaults in production.
   `config.ai.isConfigured` is true only once both a key and model are set,
   so agents can tell "no AI configured" apart from "AI configured but
   failed" without ever hardcoding credentials.
-- `@recoverai/cli`: all seven commands registered. **`ingest`, `analyze`,
-  `agent --stage diagnosis|strategy`, and `recover` are fully functional**
-  (real ingestion, real classification, real risk scoring, real grounded
-  diagnosis/strategy selection, real policy-checked SIMULATED recovery
-  execution + independent verification — see
-  [§7](#7-transaction-intelligence-deterministic-not-ai) and
-  [§8](#8-agent-architecture)). `recover` always runs in simulation mode;
-  `--live` is rejected outright, not silently ignored — there is no hidden
-  live-execution path. `init`, `simulate`, `report`, and every other
-  `agent` stage still return "Not implemented yet."
+- `@recoverai/cli`: all eight commands registered. **`ingest`, `analyze`,
+  `agent --stage diagnosis|strategy`, `recover`, and `pipeline run` are
+  fully functional** (real ingestion, real classification, real risk
+  scoring, real detection/prioritization/diagnosis/strategy selection,
+  real policy-checked SIMULATED recovery execution + independent
+  verification — see [§7](#7-transaction-intelligence-deterministic-not-ai)
+  and [§8](#8-agent-architecture)). `pipeline run --transaction <id>` runs
+  the full six-stage pipeline for one transaction; omitting `--transaction`
+  runs it in **batch mode** over every transaction in the file (verified
+  at 10,000 transactions in ~7 seconds, fully deterministic, every
+  verification passing). `recover`/`pipeline` always run in simulation
+  mode; `recover --live` is rejected outright, not silently ignored —
+  there is no hidden live-execution path. `init`, `simulate`, `report`,
+  and every other `agent` stage still return "Not implemented yet."
 - `apps/web`: the `/dashboard` route renders real numbers (GMV, revenue at
   risk, estimated recoverable, failure breakdown, top opportunities)
   computed server-side via `@recoverai/analysis`, linking through to
@@ -445,9 +507,14 @@ problem — it does not fail silently or fall back to defaults in production.
   simulated outcome/recovered amount, verification status, and full audit
   metadata per stage), with an explicit "AI GENERATED" /
   "DETERMINISTIC FALLBACK" badge per AI-capable stage and a prominent
-  "SIMULATION MODE" badge over the entire recovery-execution area — no
-  simulated figure is ever presented as real merchant revenue. The other
-  three routes (transactions, recovery activity, audit log) are still
+  "SIMULATION MODE" badge over the entire recovery-execution area. The
+  `/recovery` route is now a real **portfolio dashboard**: it runs the
+  full `RecoveryPipeline`/`BatchRecoveryPipeline` over the bundled sample
+  dataset server-side and renders pipeline status counts, priority/
+  diagnosis/strategy/execution distributions, revenue at risk, and
+  **simulated** recovered amount/recovery rate — all computed live, no
+  fabricated chart or number, and every recovery figure explicitly
+  SIMULATED. The remaining two routes (transactions, audit log) are still
   empty-state placeholders.
 - Deterministic sample data: `data/samples/transactions.json` (rich) and
   `data/samples/transactions.csv` (flat), covering successful payments,
@@ -456,26 +523,30 @@ problem — it does not fail silently or fall back to defaults in production.
   generator (`scripts/generate-sample-data.ts`) now produces realistic,
   weighted, repeat-customer distributions at any scale (verified
   deterministic at 10,000 records) and emits both JSON and CSV.
-- Three evaluation harnesses against synthetic, ground-truth cases —
+- Four evaluation harnesses against synthetic, ground-truth cases —
   `data/evaluation/diagnosis-cases.json` (22 cases) /
   `pnpm evaluate:diagnosis`, `data/evaluation/strategy-cases.json`
-  (25 cases) / `pnpm evaluate:strategy`, and
+  (25 cases) / `pnpm evaluate:strategy`,
   `data/evaluation/recovery-cases.json` (30 cases) /
-  `pnpm evaluate:recovery` (policy allow/block correctness, execution
-  result validity, verification pass rate, and same-seed simulation
-  consistency) — all compute real results from an actual run against the
-  real agents; none hardcode a result.
-- 320+ Vitest tests across 40+ files: domain types, config validation, the
+  `pnpm evaluate:recovery`, and `data/evaluation/pipeline-cases.json`
+  (50 cases) / `pnpm evaluate:pipeline` — the last of these runs the real,
+  complete `RecoveryPipeline` end to end (no hand-constructed intermediate
+  stage output) and reports pipeline-status accuracy, policy violations,
+  invalid outputs, verification failures, and same-seed simulation
+  consistency. All four compute real results from an actual run against
+  the real agents; none hardcode a result.
+- 376+ Vitest tests across 47+ files: domain types, config validation, the
   payment simulator's determinism, ingestion (valid/malformed JSON+CSV),
   every failure classification category, risk/recoverability scoring
   bounds and behavior, prioritization ordering, dataset-generator
-  determinism, CLI command/service wiring, the full diagnosis and strategy
-  agent suites, and — new this phase — the full recovery suite:
-  deterministic strategy→action mapping, execution policy (every
-  block/allow rule), the seeded simulator's determinism, independent
-  verification's consistency checks, and `SimulatedRecoveryAgent` behavior
-  against a mocked `RecoverySimulationProvider` — no real API or network
-  calls in any automated test.
+  determinism, CLI command/service wiring, the full diagnosis/strategy/
+  recovery agent suites, and — new this phase — detection (every
+  detected/actionable rule), prioritization (every factor), the full
+  `RecoveryPipeline` (successful/skipped/blocked/manual-review/
+  verification-failure paths, stage-metadata preservation, never throwing),
+  and `BatchRecoveryPipeline` (mixed outcomes, deterministic aggregation,
+  metrics consistency) — no real API or network calls in any automated
+  test.
 
 **Explicitly NOT implemented (by design, at this stage):**
 
@@ -497,13 +568,6 @@ problem — it does not fail silently or fall back to defaults in production.
   simulation or left to fail unpredictably; there is no approval-granting
   mechanism yet, so every strategy that `requiresHumanApproval` resolves
   to `pending`, never to an auto-approved execution.
-- `RecoveryPipeline.run()` (the full six-stage orchestration) still throws
-  — `DetectionAgent`/`PrioritizationAgent` aren't wrapped as real agent
-  implementations yet (their logic exists and is used directly, via
-  `@recoverai/analysis`, by the CLI/web integration points instead), so
-  the orchestrator isn't wired end to end even though four of its six
-  stages now have real implementations that can be — and are — called
-  directly.
 - No persistent database — `@recoverai/database` only has an in-memory
   store, so `ingest`, `analyze`, `agent`, and `recover` each start fresh
   per invocation; there is no cross-process persistence yet. (`recover`
@@ -532,29 +596,38 @@ problem — it does not fail silently or fall back to defaults in production.
    seeded **simulation** of recovery execution (never live), wired into the
    CLI (`recoverai recover`) and dashboard, with its own evaluation
    harness. `--live` is rejected outright; there is no hidden live path.
-5. **Persistence** — a real database backend (Postgres via Prisma or
+5. ~~**Detection, Prioritization & Full Recovery Pipeline**~~ — ✅ done:
+   deterministic `DeterministicDetectionAgent` and
+   `DeterministicPrioritizationAgent` (no model, ever), a complete
+   `RecoveryPipeline` that orchestrates Detection → Prioritization →
+   Diagnosis → Strategy → Recovery Execution → Verification → Audit without
+   ever throwing for an expected business outcome, and a sequential
+   `BatchRecoveryPipeline` with deterministic portfolio metrics — wired
+   into `recoverai pipeline run` and the `/recovery` dashboard, with its
+   own evaluation harness (`pnpm evaluate:pipeline`).
+6. **Persistence** — a real database backend (Postgres via Prisma or
    Drizzle) implementing the `Database` shape already defined in
    `@recoverai/database`, so ingested data and every agent decision
    (diagnosis, strategy, simulated execution, verification) survive across
    CLI invocations and dashboard requests, instead of each starting from a
    fresh in-memory store.
-6. **Real recovery execution** — implement a live `RecoveryActionProvider`
+7. **Real recovery execution** — implement a live `RecoveryActionProvider`
    (e.g. real email/SMS/WhatsApp senders, a real payment-link generator)
    behind the same `RecoveryAgent` interface the simulator already
    implements, gated by an actual human-approval mechanism for every
    strategy that `requiresHumanApproval` — turning today's `pending`
    outcome into a real, audited action for the first time.
-7. **Full dashboard data wiring** — connect the remaining routes
+8. **Full dashboard data wiring** — connect the remaining routes
    (transactions, recovery activity, audit log) to real ingested/analyzed/
    executed data, replacing today's per-request in-memory recomputation.
-8. **Real Razorpay integration** — implement `RazorpayPaymentProvider` /
+9. **Real Razorpay integration** — implement `RazorpayPaymentProvider` /
    `RazorpayRecoveryActionProvider` behind the existing interfaces, with no
    changes required to the domain layer or agents — the same interface
    boundary that lets `RecoveryExecutionSimulator` stand in today.
-9. **Metrics & evaluation at the real-recovery layer** — once §6–8 exist,
-   measure real recovery-agent performance against ground truth, extending
-   (not replacing) the simulation-based evaluation harnesses already in
-   place for diagnosis, strategy, and simulated recovery.
+10. **Metrics & evaluation at the real-recovery layer** — once §7–9 exist,
+    measure real recovery-agent performance against ground truth, extending
+    (not replacing) the simulation-based evaluation harnesses already in
+    place for diagnosis, strategy, and simulated recovery.
 
 ## License
 
