@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AlertTriangle, ArrowLeftRight, ListChecks, TrendingUp } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -128,7 +129,12 @@ export default async function DashboardPage() {
                   {analysis.candidates.slice(0, 10).map((candidate) => (
                     <TableRow key={candidate.transactionId}>
                       <TableCell className="font-mono text-xs">
-                        {candidate.transactionId}
+                        <Link
+                          href={`/dashboard/diagnosis/${candidate.transactionId}`}
+                          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                        >
+                          {candidate.transactionId}
+                        </Link>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {FAILURE_LABELS[candidate.failureReason.code]}
