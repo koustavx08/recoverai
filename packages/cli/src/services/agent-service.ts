@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { AuditEvent, ISODateString, Logger } from "@recoverai/core";
+import type { AuditEvent, FailureReasonCode, ISODateString, Logger } from "@recoverai/core";
 import { brand } from "@recoverai/core";
 import {
   buildCustomerHistoryIndex,
@@ -9,8 +9,15 @@ import {
   NEUTRAL_CUSTOMER_HISTORY,
   scoreTransaction,
 } from "@recoverai/analysis";
-import { GroundedDiagnosisAgent, type DiagnosisInput, type DiagnosisOutcome } from "@recoverai/agents";
-import { AnthropicProvider } from "@recoverai/integrations";
+import {
+  GroundedDiagnosisAgent,
+  GroundedStrategyAgent,
+  type DiagnosisInput,
+  type DiagnosisOutcome,
+  type StrategyInput,
+  type StrategyOutcome,
+} from "@recoverai/agents";
+import { AnthropicProvider, type AIModelProvider } from "@recoverai/integrations";
 import { loadConfig } from "@recoverai/config";
 import { createInMemoryDatabase } from "@recoverai/database";
 import type { NormalizedTransaction } from "@recoverai/analysis";
@@ -25,6 +32,7 @@ export const agentOptionsSchema = z.object({
       "detection",
       "diagnosis",
       "prioritization",
+      "strategy",
       "strategy_selection",
       "recovery_execution",
       "verification",
@@ -35,6 +43,13 @@ export const agentOptionsSchema = z.object({
   json: z.boolean().optional().default(false),
 });
 export type AgentOptions = z.infer<typeof agentOptionsSchema>;
+
+function resolveProvider(): AIModelProvider | null {
+  const config = loadConfig();
+  return config.ai.isConfigured && config.ai.apiKey && config.ai.model
+    ? new AnthropicProvider({ apiKey: config.ai.apiKey, model: config.ai.model })
+    : null;
+}
 
 function buildDiagnosisAuditEvent(
   transaction: NormalizedTransaction,
@@ -69,32 +84,62 @@ function buildDiagnosisAuditEvent(
   };
 }
 
+function buildStrategyAuditEvent(
+  transaction: NormalizedTransaction,
+  agentId: string,
+  outcome: StrategyOutcome,
+): AuditEvent {
+  return {
+    id: brand<string, "AuditEventId">(randomUUID()),
+    type: "strategy_selected",
+    merchantId: transaction.merchantId,
+    transactionId: transaction.id,
+    actorType: "agent",
+    actorId: agentId,
+    summary: `Strategy agent selected "${outcome.decision.strategy}" (${outcome.meta.mode} mode).`,
+    data: {
+      mode: outcome.meta.mode,
+      provider: outcome.meta.provider,
+      model: outcome.meta.model,
+      latencyMs: outcome.meta.latencyMs,
+      validationSuccess: outcome.meta.validationSuccess,
+      fallbackUsed: outcome.meta.fallbackUsed,
+      fallbackReason: outcome.meta.fallbackReason ?? null,
+      inputTokenCount: outcome.meta.inputTokens ?? null,
+      outputTokenCount: outcome.meta.outputTokens ?? null,
+      selectedStrategy: outcome.decision.strategy,
+      confidence: outcome.decision.confidence,
+      requiresHumanApproval: outcome.decision.requiresHumanApproval,
+    },
+    occurredAt: brand<string, "ISODateString">(new Date().toISOString()) as ISODateString,
+  };
+}
+
+interface DiagnosisContext {
+  readonly transaction: NormalizedTransaction;
+  readonly transactions: readonly NormalizedTransaction[];
+  readonly failureCode: FailureReasonCode;
+  readonly retryable: boolean;
+  readonly riskScore: number;
+  readonly recoverabilityScore: number;
+  readonly expectedRecoveryAmount: NormalizedTransaction["amount"];
+  readonly priority: "critical" | "high" | "medium" | "low";
+  readonly diagnosisOutcome: DiagnosisOutcome;
+}
+
 /**
- * Runs the "diagnosis" agent stage against a single transaction in a
- * dataset: ingest -> classify -> risk-score -> diagnose -> audit. Every
- * other stage remains not-implemented (the Strategy/Recovery agents are out
- * of scope for this phase — see docs/agent-architecture.md).
+ * Shared setup for every stage downstream of diagnosis: ingest -> classify
+ * -> risk-score -> diagnose. Both the "diagnosis" and "strategy" stages
+ * need this exact pipeline (Strategy Selection sits strictly downstream of
+ * Diagnosis in the architecture — see docs/agent-architecture.md), so it's
+ * built once here rather than duplicated per stage.
  */
-export async function runAgent(options: AgentOptions, logger: Logger): Promise<CommandResult> {
-  logger.log("debug", "agent service invoked", { stage: options.stage ?? "all" });
-
-  if (options.stage !== "diagnosis") {
-    return notImplemented(
-      "agent",
-      options.stage
-        ? `The "${options.stage}" agent stage is not implemented yet.`
-        : 'Only the "diagnosis" stage is implemented so far. Pass --stage diagnosis --transaction <id>.',
-    );
-  }
-
-  if (!options.transaction) {
-    return errorResult(
-      "agent",
-      "--transaction <id> is required for --stage diagnosis, e.g. --transaction txn_00002.",
-    );
-  }
-
-  const filePath = options.file ?? DEFAULT_AGENT_FILE;
+async function buildDiagnosisContext(
+  transactionId: string,
+  filePath: string,
+  provider: AIModelProvider | null,
+  logger: Logger,
+): Promise<DiagnosisContext | CommandResult> {
   const db = createInMemoryDatabase();
 
   let transactions: readonly NormalizedTransaction[];
@@ -104,11 +149,11 @@ export async function runAgent(options: AgentOptions, logger: Logger): Promise<C
     return errorResult("agent", error instanceof Error ? error.message : String(error));
   }
 
-  const transaction = transactions.find((t) => t.id === options.transaction);
+  const transaction = transactions.find((t) => t.id === transactionId);
   if (!transaction) {
     return errorResult(
       "agent",
-      `Transaction "${options.transaction}" was not found in "${filePath}".`,
+      `Transaction "${transactionId}" was not found in "${filePath}".`,
     );
   }
 
@@ -138,23 +183,65 @@ export async function runAgent(options: AgentOptions, logger: Logger): Promise<C
     },
   };
 
-  const config = loadConfig();
-  const provider =
-    config.ai.isConfigured && config.ai.apiKey && config.ai.model
-      ? new AnthropicProvider({ apiKey: config.ai.apiKey, model: config.ai.model })
-      : null;
+  const diagnosisAgent = new GroundedDiagnosisAgent({ provider });
+  const diagnosisOutcome = await diagnosisAgent.diagnose(diagnosisInput, { logger });
+  await db.auditEvents.append(
+    buildDiagnosisAuditEvent(transaction, diagnosisAgent.id, diagnosisOutcome),
+  );
 
-  const agent = new GroundedDiagnosisAgent({ provider });
-  const outcome = await agent.diagnose(diagnosisInput, { logger });
+  return {
+    transaction,
+    transactions,
+    failureCode: failureReason.code,
+    retryable: failureReason.recoverable,
+    riskScore: risk.riskScore,
+    recoverabilityScore: risk.recoverabilityScore,
+    expectedRecoveryAmount: risk.expectedRecoveryAmount,
+    priority: risk.priority,
+    diagnosisOutcome,
+  };
+}
 
-  await db.auditEvents.append(buildDiagnosisAuditEvent(transaction, agent.id, outcome));
+function isCommandResult(value: DiagnosisContext | CommandResult): value is CommandResult {
+  return "status" in value;
+}
 
+/** Deterministic: has this customer ever succeeded with a different payment method than the one on the given transaction, within the same ingested batch? */
+function hasSucceededWithAlternateMethod(
+  transactions: readonly NormalizedTransaction[],
+  transaction: NormalizedTransaction,
+): boolean {
+  return transactions.some(
+    (t) =>
+      t.customerId === transaction.customerId &&
+      t.status === "succeeded" &&
+      t.paymentMethod !== transaction.paymentMethod,
+  );
+}
+
+async function runDiagnosisStage(
+  options: AgentOptions,
+  logger: Logger,
+): Promise<CommandResult> {
+  if (!options.transaction) {
+    return errorResult(
+      "agent",
+      "--transaction <id> is required for --stage diagnosis, e.g. --transaction txn_00002.",
+    );
+  }
+
+  const filePath = options.file ?? DEFAULT_AGENT_FILE;
+  const provider = resolveProvider();
+  const context = await buildDiagnosisContext(options.transaction, filePath, provider, logger);
+  if (isCommandResult(context)) return context;
+
+  const { transaction, failureCode, diagnosisOutcome } = context;
   logger.log("info", "diagnosis agent completed", {
     transactionId: transaction.id,
-    mode: outcome.meta.mode,
-    fallbackUsed: outcome.meta.fallbackUsed,
-    validationSuccess: outcome.meta.validationSuccess,
-    latencyMs: outcome.meta.latencyMs,
+    mode: diagnosisOutcome.meta.mode,
+    fallbackUsed: diagnosisOutcome.meta.fallbackUsed,
+    validationSuccess: diagnosisOutcome.meta.validationSuccess,
+    latencyMs: diagnosisOutcome.meta.latencyMs,
   });
 
   return {
@@ -162,9 +249,97 @@ export async function runAgent(options: AgentOptions, logger: Logger): Promise<C
     command: "agent",
     transactionId: transaction.id,
     amount: transaction.amount,
-    failureCode: failureReason.code,
-    diagnosis: outcome.diagnosis,
-    meta: outcome.meta,
+    failureCode,
+    diagnosis: diagnosisOutcome.diagnosis,
+    meta: diagnosisOutcome.meta,
     json: options.json,
   };
+}
+
+async function runStrategyStage(options: AgentOptions, logger: Logger): Promise<CommandResult> {
+  if (!options.transaction) {
+    return errorResult(
+      "agent",
+      "--transaction <id> is required for --stage strategy, e.g. --transaction txn_00002.",
+    );
+  }
+
+  const filePath = options.file ?? DEFAULT_AGENT_FILE;
+  const provider = resolveProvider();
+  const context = await buildDiagnosisContext(options.transaction, filePath, provider, logger);
+  if (isCommandResult(context)) return context;
+
+  const {
+    transaction,
+    transactions,
+    retryable,
+    riskScore,
+    recoverabilityScore,
+    expectedRecoveryAmount,
+    priority,
+    diagnosisOutcome,
+  } = context;
+
+  const strategyInput: StrategyInput = {
+    transactionId: transaction.id,
+    diagnosis: diagnosisOutcome.diagnosis,
+    amount: transaction.amount,
+    riskScore,
+    recoverabilityScore,
+    expectedRecoveryAmount,
+    priority,
+    attemptCount: transaction.attemptCount,
+    retryable,
+    hasSucceededWithAlternateMethod: hasSucceededWithAlternateMethod(transactions, transaction),
+  };
+
+  const db = createInMemoryDatabase();
+  const strategyAgent = new GroundedStrategyAgent({ provider });
+  const strategyOutcome = await strategyAgent.selectStrategy(strategyInput, { logger });
+  await db.auditEvents.append(
+    buildStrategyAuditEvent(transaction, strategyAgent.id, strategyOutcome),
+  );
+
+  logger.log("info", "strategy agent completed", {
+    transactionId: transaction.id,
+    mode: strategyOutcome.meta.mode,
+    strategy: strategyOutcome.decision.strategy,
+    fallbackUsed: strategyOutcome.meta.fallbackUsed,
+    validationSuccess: strategyOutcome.meta.validationSuccess,
+    latencyMs: strategyOutcome.meta.latencyMs,
+  });
+
+  return {
+    status: "strategized",
+    command: "agent",
+    transactionId: transaction.id,
+    diagnosis: diagnosisOutcome.diagnosis,
+    riskScore,
+    recoverabilityScore,
+    decision: strategyOutcome.decision,
+    meta: strategyOutcome.meta,
+    json: options.json,
+  };
+}
+
+/**
+ * Runs the "diagnosis" or "strategy" agent stage against a single
+ * transaction in a dataset. Every other stage remains not-implemented (the
+ * Recovery/Verification agents are out of scope for this phase — see
+ * docs/agent-architecture.md).
+ */
+export async function runAgent(options: AgentOptions, logger: Logger): Promise<CommandResult> {
+  logger.log("debug", "agent service invoked", { stage: options.stage ?? "all" });
+
+  if (options.stage === "diagnosis") return runDiagnosisStage(options, logger);
+  if (options.stage === "strategy" || options.stage === "strategy_selection") {
+    return runStrategyStage(options, logger);
+  }
+
+  return notImplemented(
+    "agent",
+    options.stage
+      ? `The "${options.stage}" agent stage is not implemented yet.`
+      : 'Only the "diagnosis" and "strategy" stages are implemented so far. Pass --stage diagnosis|strategy --transaction <id>.',
+  );
 }

@@ -96,4 +96,72 @@ describe("runAgent", () => {
     expect(a.diagnosis.confidence).toBe(b.diagnosis.confidence);
     expect(a.diagnosis.interventionEligibility).toEqual(b.diagnosis.interventionEligibility);
   });
+
+  it("returns an error when --stage strategy is given without --transaction", async () => {
+    const result = await runAgent({ stage: "strategy", json: false }, noopLogger);
+    expect(result.status).toBe("error");
+  });
+
+  it("returns an error for a strategy request against a transaction id that doesn't exist", async () => {
+    const result = await runAgent(
+      { stage: "strategy", transaction: "txn_does_not_exist", json: false },
+      noopLogger,
+    );
+    expect(result.status).toBe("error");
+  });
+
+  it("runs the strategy agent deterministically against the bundled sample dataset without AI credentials", async () => {
+    const result = await runAgent(
+      { stage: "strategy", transaction: "txn_00002", json: false },
+      noopLogger,
+    );
+    expect(result.status).toBe("strategized");
+    if (result.status !== "strategized") throw new Error("unreachable");
+    expect(result.transactionId).toBe("txn_00002");
+    expect(result.meta.mode).toBe("deterministic");
+    expect(result.meta.fallbackUsed).toBe(true);
+    expect(result.decision.transactionId).toBe("txn_00002");
+    expect(result.decision.supportingEvidence.length).toBeGreaterThan(0);
+    expect(typeof result.decision.requiresHumanApproval).toBe("boolean");
+  });
+
+  it("accepts the strategy_selection alias for --stage strategy", async () => {
+    const result = await runAgent(
+      { stage: "strategy_selection", transaction: "txn_00002", json: false },
+      noopLogger,
+    );
+    expect(result.status).toBe("strategized");
+  });
+
+  it("carries the json flag through to a strategized result", async () => {
+    const result = await runAgent(
+      { stage: "strategy", transaction: "txn_00002", json: true },
+      noopLogger,
+    );
+    if (result.status !== "strategized") throw new Error("unreachable");
+    expect(result.json).toBe(true);
+  });
+
+  it("never recommends a retry-based strategy for a non-retryable transaction (txn_00009, refund_related)", async () => {
+    const result = await runAgent(
+      { stage: "strategy", transaction: "txn_00009", json: false },
+      noopLogger,
+    );
+    if (result.status !== "strategized") throw new Error("unreachable");
+    expect(result.decision.strategy).not.toBe("retry_payment");
+    expect(result.decision.strategy).not.toBe("wait_and_retry");
+  });
+
+  it("returns an error for a nonexistent data file on the strategy stage", async () => {
+    const result = await runAgent(
+      {
+        stage: "strategy",
+        transaction: "txn_00002",
+        file: "data/samples/does-not-exist.json",
+        json: false,
+      },
+      noopLogger,
+    );
+    expect(result.status).toBe("error");
+  });
 });

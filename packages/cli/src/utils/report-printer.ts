@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { AnalysisResult, IngestionSummary } from "@recoverai/analysis";
 import type { FailureReasonCode, TransactionStatus } from "@recoverai/core";
-import type { DiagnosedResult } from "../services/types.js";
+import type { DiagnosedResult, StrategizedResult } from "../services/types.js";
 import { formatCount, formatMoney } from "./format.js";
 
 const STATUS_LABELS: Readonly<Record<TransactionStatus, string>> = {
@@ -206,6 +206,88 @@ export function printDiagnosisJson(result: DiagnosedResult): void {
         amount: result.amount,
         failureCode: result.failureCode,
         diagnosis: result.diagnosis,
+        meta: result.meta,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function describeStrategyMode(result: StrategizedResult): string {
+  const { meta } = result;
+  if (meta.mode === "llm") {
+    return `AI-assisted (provider: ${meta.provider ?? "unknown"}, model: ${meta.model ?? "unknown"})`;
+  }
+  return meta.fallbackReason
+    ? `Deterministic fallback (${meta.fallbackReason})`
+    : "Deterministic fallback";
+}
+
+export function printStrategy(result: StrategizedResult): void {
+  const { decision } = result;
+  const out: string[] = [];
+
+  out.push("RecoverAI Strategy Decision");
+  out.push("");
+  out.push(line("Transaction:", result.transactionId, 22));
+  out.push(line("Diagnosis:", result.diagnosis.category, 22));
+  out.push(line("Risk:", `${result.riskScore}/100`, 22));
+  out.push(line("Recoverability:", `${result.recoverabilityScore}/100`, 22));
+  out.push("");
+  out.push("Selected strategy:");
+  out.push(`  ${decision.strategy}`);
+  out.push("");
+  out.push(line("Confidence:", `${Math.round(decision.confidence * 100)}%`, 22));
+  out.push(line("Human approval:", decision.requiresHumanApproval ? "required" : "not required", 22));
+  out.push("");
+  out.push("Rationale:");
+  out.push(`  ${decision.rationale}`);
+  out.push("");
+  out.push("Expected outcome:");
+  out.push(`  ${decision.expectedOutcome}`);
+
+  if (decision.constraints.length > 0) {
+    out.push("");
+    out.push("Constraints applied:");
+    for (const constraint of decision.constraints) {
+      out.push(`  - ${constraint}`);
+    }
+  }
+
+  out.push("");
+  out.push("Supporting evidence:");
+  for (const item of decision.supportingEvidence) {
+    out.push(`  - [${item.id}] ${item.fact}`);
+  }
+
+  if (decision.limitations.length > 0) {
+    out.push("");
+    out.push("Limitations:");
+    for (const limitation of decision.limitations) {
+      out.push(`  - ${limitation}`);
+    }
+  }
+
+  out.push("");
+  out.push(`Mode: ${describeStrategyMode(result)}`);
+  out.push("");
+  out.push(
+    "Note: this is a strategy recommendation only. No recovery action has been executed and no money has been recovered.",
+  );
+
+  console.info(out.join("\n"));
+}
+
+export function printStrategyJson(result: StrategizedResult): void {
+  console.info(
+    JSON.stringify(
+      {
+        transactionId: result.transactionId,
+        diagnosis: result.diagnosis,
+        riskScore: result.riskScore,
+        recoverabilityScore: result.recoverabilityScore,
+        decision: result.decision,
         meta: result.meta,
       },
       null,

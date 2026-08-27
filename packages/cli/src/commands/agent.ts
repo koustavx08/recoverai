@@ -5,6 +5,8 @@ import {
   printDiagnosis,
   printDiagnosisJson,
   printResult,
+  printStrategy,
+  printStrategyJson,
 } from "../utils/index.js";
 import { agentOptionsSchema, runAgent } from "../services/index.js";
 
@@ -13,11 +15,11 @@ export function agentCommand(): Command {
     .description("Run or inspect the RecoverAI agent pipeline")
     .option(
       "-s, --stage <stage>",
-      "pipeline stage to run: detection|diagnosis|prioritization|strategy_selection|recovery_execution|verification",
+      "pipeline stage to run: detection|diagnosis|prioritization|strategy|recovery_execution|verification",
     )
     .option(
       "-t, --transaction <id>",
-      "transaction id to run the stage against (required for --stage diagnosis)",
+      "transaction id to run the stage against (required for --stage diagnosis|strategy)",
     )
     .option(
       "-f, --file <path>",
@@ -31,6 +33,12 @@ export function agentCommand(): Command {
       if (result.status === "diagnosed") {
         if (result.json) printDiagnosisJson(result);
         else printDiagnosis(result);
+        return;
+      }
+
+      if (result.status === "strategized") {
+        if (result.json) printStrategyJson(result);
+        else printStrategy(result);
         return;
       }
 
