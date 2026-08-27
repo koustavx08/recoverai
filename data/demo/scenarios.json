@@ -1,0 +1,172 @@
+[
+  {
+    "id": "demo_txn_01",
+    "merchantId": "mer_demo_showcase",
+    "customerId": "cus_demo_01",
+    "amount": { "amount": 189900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "demo_atm_01",
+        "transactionId": "demo_txn_01",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "issuer_decline",
+        "providerErrorMessage": "Card issuer declined the transaction (do not honor).",
+        "attemptedAt": "2026-08-27T09:14:02.000Z"
+      }
+    ],
+    "createdAt": "2026-08-27T09:14:00.000Z",
+    "updatedAt": "2026-08-27T09:14:02.000Z",
+    "metadata": {
+      "scenario": "demo_successful_recovery",
+      "title": "Successful Recovery",
+      "narrative": "Issuer decline on a card payment, but this customer has already paid successfully with a different method before. RecoverAI diagnoses the decline, selects switch_payment_method, simulates the retry, and independently verifies the result."
+    }
+  },
+  {
+    "id": "demo_txn_01_history",
+    "merchantId": "mer_demo_showcase",
+    "customerId": "cus_demo_01",
+    "amount": { "amount": 59900, "currency": "INR" },
+    "status": "succeeded",
+    "paymentMethod": "upi",
+    "attempts": [
+      {
+        "id": "demo_atm_01_history",
+        "transactionId": "demo_txn_01_history",
+        "status": "succeeded",
+        "paymentMethod": "upi",
+        "attemptedAt": "2026-08-20T18:02:00.000Z"
+      }
+    ],
+    "createdAt": "2026-08-20T18:01:50.000Z",
+    "updatedAt": "2026-08-20T18:02:00.000Z",
+    "metadata": {
+      "scenario": "demo_history_support",
+      "title": "Supporting history",
+      "narrative": "Not a showcase case on its own — this prior successful UPI payment is what gives demo_txn_01 its 'already succeeded with an alternate method' signal."
+    }
+  },
+  {
+    "id": "demo_txn_02",
+    "merchantId": "mer_demo_showcase",
+    "customerId": "cus_demo_02",
+    "amount": { "amount": 149900, "currency": "INR" },
+    "status": "succeeded",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "demo_atm_02",
+        "transactionId": "demo_txn_02",
+        "status": "succeeded",
+        "paymentMethod": "card",
+        "attemptedAt": "2026-08-27T10:05:11.000Z"
+      }
+    ],
+    "createdAt": "2026-08-27T10:05:00.000Z",
+    "updatedAt": "2026-08-27T10:05:11.000Z",
+    "metadata": {
+      "scenario": "demo_no_action_needed",
+      "title": "No Action Needed",
+      "narrative": "The payment already succeeded. Detection stops the pipeline immediately — nothing downstream runs, because there is nothing to recover."
+    }
+  },
+  {
+    "id": "demo_txn_03",
+    "merchantId": "mer_demo_showcase",
+    "customerId": "cus_demo_03",
+    "amount": { "amount": 99900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "demo_atm_03a",
+        "transactionId": "demo_txn_03",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "issuer_decline",
+        "providerErrorMessage": "Card issuer declined the transaction (do not honor).",
+        "attemptedAt": "2026-08-25T08:00:12.000Z"
+      },
+      {
+        "id": "demo_atm_03b",
+        "transactionId": "demo_txn_03",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "issuer_decline",
+        "providerErrorMessage": "Card issuer declined the transaction (do not honor).",
+        "attemptedAt": "2026-08-25T14:30:47.000Z"
+      },
+      {
+        "id": "demo_atm_03c",
+        "transactionId": "demo_txn_03",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "issuer_decline",
+        "providerErrorMessage": "Card issuer declined the transaction (do not honor).",
+        "attemptedAt": "2026-08-26T09:02:03.000Z"
+      }
+    ],
+    "createdAt": "2026-08-25T08:00:00.000Z",
+    "updatedAt": "2026-08-26T09:02:03.000Z",
+    "metadata": {
+      "scenario": "demo_retry_limit_blocked",
+      "title": "Retry Limit Blocked",
+      "narrative": "Three failed attempts already recorded. Detection marks this transaction as reaching the retry cap and blocks it outright — RecoverAI refuses to keep hammering a payment method that keeps failing."
+    }
+  },
+  {
+    "id": "demo_txn_04",
+    "merchantId": "mer_demo_showcase",
+    "customerId": "cus_demo_04",
+    "amount": { "amount": 349900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "card",
+    "attempts": [
+      {
+        "id": "demo_atm_04",
+        "transactionId": "demo_txn_04",
+        "status": "failed",
+        "paymentMethod": "card",
+        "failureReasonCode": "processor_error",
+        "providerErrorMessage": "Payment processor returned an unexpected error code (0x4F2).",
+        "attemptedAt": "2026-08-27T11:40:22.000Z"
+      }
+    ],
+    "createdAt": "2026-08-27T11:39:50.000Z",
+    "updatedAt": "2026-08-27T11:40:22.000Z",
+    "metadata": {
+      "scenario": "demo_manual_review_blocked",
+      "title": "Manual Review Required",
+      "narrative": "An ambiguous processor error — not enough of a clear signal to pick an automated recovery action. Diagnosis and Strategy both escalate to manual_review, and the Recovery Execution Policy blocks it outright: a human has to look at this one. No money moves."
+    }
+  },
+  {
+    "id": "demo_txn_05",
+    "merchantId": "mer_demo_showcase",
+    "customerId": "cus_demo_05",
+    "amount": { "amount": 499900, "currency": "INR" },
+    "status": "failed",
+    "paymentMethod": "netbanking",
+    "attempts": [
+      {
+        "id": "demo_atm_05",
+        "transactionId": "demo_txn_05",
+        "status": "failed",
+        "paymentMethod": "netbanking",
+        "failureReasonCode": "insufficient_funds",
+        "providerErrorMessage": "Insufficient balance on account.",
+        "attemptedAt": "2026-08-27T12:20:44.000Z"
+      }
+    ],
+    "createdAt": "2026-08-27T12:20:00.000Z",
+    "updatedAt": "2026-08-27T12:20:44.000Z",
+    "metadata": {
+      "scenario": "demo_pending_human_approval",
+      "title": "Pending Human Approval",
+      "narrative": "Insufficient funds on a high-value transaction. Strategy selects manual_followup, which requires a human's approval before it can run — the plan is recorded, but execution stays pending. Still simulation-only, still no money moved."
+    }
+  }
+]

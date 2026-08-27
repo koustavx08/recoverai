@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
   LayoutDashboard,
+  PlayCircle,
   RefreshCcw,
   ScrollText,
   ShieldCheck,
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/recovery", label: "Recovery Activity", icon: RefreshCcw },
+  { href: "/demo", label: "Demo Scenarios", icon: PlayCircle },
   { href: "/audit-log", label: "Audit Log", icon: ScrollText },
 ] as const;
 

@@ -177,6 +177,9 @@ recoverai recover --transaction txn_00002 --live    # rejected — no live execu
 recoverai pipeline run --transaction txn_00002       # full 6-stage pipeline for one transaction
 recoverai pipeline run --file data/samples/transactions.json   # batch mode — every transaction in the file
 recoverai pipeline run --file data/generated/transactions.json --seed abc --json
+
+recoverai pipeline run --file data/demo/scenarios.json         # 5 curated demo cases, narrated below
+recoverai pipeline run --transaction demo_txn_04 --file data/demo/scenarios.json  # one case, full walkthrough
 ```
 
 `ingest`, `analyze`, `agent`, `recover`, and `pipeline` each start from a
@@ -191,6 +194,24 @@ there is no hidden live-execution path anywhere in this codebase.
 `pipeline run` runs in **batch mode over every transaction in the file**
 whenever `--transaction` is omitted — this is the one command that
 processes a whole file's worth of transactions in one invocation.
+
+**Demo scenarios.** `data/demo/scenarios.json` is a small, hand-picked
+dataset (6 transactions, 5 named cases) chosen to walk through the full
+range of real pipeline outcomes — not just the happy path:
+
+| Case | What it shows |
+| --- | --- |
+| `demo_txn_01` — Successful Recovery | Issuer decline + prior success with a different payment method → `switch_payment_method` → SIMULATED success → verified |
+| `demo_txn_02` — No Action Needed | Already succeeded → Detection stops the pipeline immediately, nothing downstream runs |
+| `demo_txn_03` — Retry Limit Blocked | Three failed attempts already on record → Detection blocks it outright before any diagnosis is attempted |
+| `demo_txn_04` — Manual Review Required | An ambiguous processor error → Diagnosis/Strategy escalate to `manual_review` → the Recovery Execution Policy blocks it — a human has to look at this one |
+| `demo_txn_05` — Pending Human Approval | Insufficient funds on a high-value transaction → `manual_followup` is selected but requires approval → execution stays `pending`, nothing simulated yet |
+
+Every outcome above is produced by the real `RecoveryPipeline` — nothing
+is hand-written or scripted — and is also rendered as narrated cards on
+the `/demo` dashboard page (see [Current project status](#11-current-project-status)).
+The point of this dataset isn't "AI recovers everything" — it's that
+RecoverAI **knows when to act, and knows when not to**.
 
 ## 7. Transaction intelligence (deterministic, not AI)
 
@@ -514,12 +535,19 @@ problem — it does not fail silently or fall back to defaults in production.
   diagnosis/strategy/execution distributions, revenue at risk, and
   **simulated** recovered amount/recovery rate — all computed live, no
   fabricated chart or number, and every recovery figure explicitly
-  SIMULATED. The remaining two routes (transactions, audit log) are still
-  empty-state placeholders.
+  SIMULATED. `/demo` is a fifth route: five hand-picked, narrated cases
+  (`data/demo/scenarios.json`) each rendered as a card walking through
+  every stage the real pipeline ran for it — chosen specifically to show
+  a success, a skip, a Detection-level block, a policy-level block, and a
+  pending-approval case side by side, all from real pipeline runs. The
+  remaining two routes (transactions, audit log) are still empty-state
+  placeholders.
 - Deterministic sample data: `data/samples/transactions.json` (rich) and
   `data/samples/transactions.csv` (flat), covering successful payments,
   issuer declines, insufficient funds, UPI failures, network timeouts,
-  expired cards, checkout abandonment, repeated failures, and refunds. The
+  expired cards, checkout abandonment, repeated failures, and refunds, plus
+  `data/demo/scenarios.json` — a small curated set for demos and
+  presentations (see [§6](#6-cli-vision)). The
   generator (`scripts/generate-sample-data.ts`) now produces realistic,
   weighted, repeat-customer distributions at any scale (verified
   deterministic at 10,000 records) and emits both JSON and CSV.
