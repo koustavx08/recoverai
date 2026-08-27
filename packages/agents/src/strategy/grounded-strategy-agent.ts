@@ -14,6 +14,7 @@ import type { StrategyDecision } from "./schema.js";
 import { llmStrategyResponseSchema } from "./schema.js";
 import type { StrategyInput } from "./types.js";
 import { validateLlmStrategyResponse } from "./validation.js";
+import { redactSecrets } from "../security/redact-secrets.js";
 
 export interface GroundedStrategyAgentOptions {
   /** `null` means "no AI provider configured" — the agent always runs deterministically in that case, never pretending otherwise. */
@@ -140,7 +141,10 @@ export class GroundedStrategyAgent implements StrategyAgent {
       };
       return { decision, meta };
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      // Redacted: this message originates from the AI provider's SDK, not
+      // this codebase, and is about to be persisted (fallbackReason) and
+      // rendered on the dashboard — see security/redact-secrets.ts.
+      const reason = redactSecrets(error instanceof Error ? error.message : String(error));
       context.logger.log("warn", "strategy agent: AI provider call failed, falling back", {
         transactionId: input.transactionId,
         reason,

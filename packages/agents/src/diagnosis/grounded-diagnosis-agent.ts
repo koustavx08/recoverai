@@ -9,6 +9,7 @@ import { DIAGNOSIS_AGENT_VERSION, buildDeterministicDiagnosis } from "./determin
 import { buildDiagnosisEvidence } from "./evidence.js";
 import { buildDiagnosisFacts } from "./facts.js";
 import { DiagnosisPromptBuilder } from "./prompt-builder.js";
+import { redactSecrets } from "../security/redact-secrets.js";
 import type { Diagnosis, EvidenceItem } from "./schema.js";
 import { llmDiagnosisResponseSchema } from "./schema.js";
 import type { DiagnosisInput } from "./types.js";
@@ -123,7 +124,10 @@ export class GroundedDiagnosisAgent implements DiagnosisAgent {
       };
       return { diagnosis, meta };
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      // Redacted: this message originates from the AI provider's SDK, not
+      // this codebase, and is about to be persisted (fallbackReason) and
+      // rendered on the dashboard — see security/redact-secrets.ts.
+      const reason = redactSecrets(error instanceof Error ? error.message : String(error));
       context.logger.log("warn", "diagnosis agent: AI provider call failed, falling back", {
         transactionId: input.transactionId,
         reason,

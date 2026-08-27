@@ -16,6 +16,7 @@
 export * from "./agents/index.js";
 export * from "./orchestration/index.js";
 export * from "./tools/index.js";
+export * from "./security/redact-secrets.js";
 export * from "./detection/index.js";
 export * from "./prioritization/index.js";
 export * from "./diagnosis/index.js";
