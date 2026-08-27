@@ -10,14 +10,20 @@ import {
   type NormalizedTransaction,
 } from "@recoverai/analysis";
 import {
+  DeterministicDetectionAgent,
+  DeterministicPrioritizationAgent,
+  DeterministicVerificationAgent,
   GroundedDiagnosisAgent,
   GroundedStrategyAgent,
+  SimulatedRecoveryAgent,
   type DiagnosisInput,
   type DiagnosisOutcome,
+  type PipelineTransactionFacts,
+  type RecoveryPipelineAgents,
   type StrategyInput,
   type StrategyOutcome,
 } from "@recoverai/agents";
-import { AnthropicProvider, type AIModelProvider } from "@recoverai/integrations";
+import { AnthropicProvider, RecoveryExecutionSimulator, type AIModelProvider } from "@recoverai/integrations";
 import { loadConfig } from "@recoverai/config";
 import { createInMemoryDatabase } from "@recoverai/database";
 import { errorResult, type CommandResult, type CommandName } from "./types.js";
@@ -238,4 +244,76 @@ export async function buildStrategyContext(
   await db.auditEvents.append(buildStrategyAuditEvent(transaction, strategyAgent.id, strategyOutcome));
 
   return { ...context, strategyOutcome, hasAlternateMethodHistory };
+}
+
+/**
+ * Constructs one instance of each of the six pipeline agents — the
+ * deterministic ones (Detection, Prioritization, Recovery, Verification)
+ * need no configuration; the two AI-capable ones (Diagnosis, Strategy)
+ * share the same resolved `AIModelProvider` (or `null`, running their
+ * deterministic fallback) that every other command uses.
+ */
+export function buildPipelineAgents(provider: AIModelProvider | null): RecoveryPipelineAgents {
+  return {
+    detection: new DeterministicDetectionAgent(),
+    diagnosis: new GroundedDiagnosisAgent({ provider }),
+    prioritization: new DeterministicPrioritizationAgent(),
+    strategy: new GroundedStrategyAgent({ provider }),
+    recovery: new SimulatedRecoveryAgent({ simulationProvider: new RecoveryExecutionSimulator() }),
+    verification: new DeterministicVerificationAgent(),
+  };
+}
+
+/**
+ * Builds one transaction's `PipelineTransactionFacts` — the flat DTO
+ * `RecoveryPipeline.run()` needs — from real ingested/classified/
+ * risk-scored data. For a transaction outside the risk-eligible statuses
+ * (succeeded/pending), classification and risk-scoring never ran (mirrors
+ * `@recoverai/analysis`'s own `analyzeTransactions()` — see
+ * `RISK_ELIGIBLE_STATUSES` there), so the failure/risk fields are simply
+ * left undefined; Detection alone is enough to correctly skip it.
+ */
+export function buildPipelineTransactionFacts(
+  transaction: NormalizedTransaction,
+  transactions: readonly NormalizedTransaction[],
+  seed?: string,
+): PipelineTransactionFacts {
+  const isRiskEligible = transaction.status === "failed" || transaction.status === "abandoned";
+  if (!isRiskEligible) {
+    return {
+      transactionId: transaction.id,
+      status: transaction.status,
+      amount: transaction.amount,
+      paymentMethod: transaction.paymentMethod,
+      attemptCount: transaction.attemptCount,
+      seed,
+    };
+  }
+
+  const failureReason = classifyFailure(transaction);
+  const customerHistoryIndex = buildCustomerHistoryIndex(transactions);
+  const customerHistory = customerHistoryIndex.get(transaction.customerId) ?? NEUTRAL_CUSTOMER_HISTORY;
+  const risk = scoreTransaction(transaction, failureReason, customerHistory, { now: new Date() });
+
+  return {
+    transactionId: transaction.id,
+    status: transaction.status,
+    amount: transaction.amount,
+    paymentMethod: transaction.paymentMethod,
+    attemptCount: transaction.attemptCount,
+    failureCode: failureReason.code,
+    failureDescription: failureReason.description,
+    retryable: failureReason.recoverable,
+    riskScore: risk.riskScore,
+    recoverabilityScore: risk.recoverabilityScore,
+    expectedRecoveryAmount: risk.expectedRecoveryAmount,
+    priority: risk.priority,
+    customerHistory: {
+      totalTransactions: customerHistory.totalTransactions,
+      successfulTransactions: customerHistory.successfulTransactions,
+      reliabilityScore: customerHistory.reliabilityScore,
+    },
+    hasSucceededWithAlternateMethod: hasSucceededWithAlternateMethod(transactions, transaction),
+    seed,
+  };
 }

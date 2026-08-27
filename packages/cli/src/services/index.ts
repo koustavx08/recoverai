@@ -6,3 +6,4 @@ export * from "./simulate-service.js";
 export * from "./recover-service.js";
 export * from "./report-service.js";
 export * from "./agent-service.js";
+export * from "./pipeline-service.js";

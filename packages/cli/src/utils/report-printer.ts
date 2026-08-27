@@ -1,7 +1,13 @@
 import { basename } from "node:path";
 import type { AnalysisResult, IngestionSummary } from "@recoverai/analysis";
 import type { FailureReasonCode, TransactionStatus } from "@recoverai/core";
-import type { DiagnosedResult, RecoveredResult, StrategizedResult } from "../services/types.js";
+import type {
+  DiagnosedResult,
+  PipelineBatchResult,
+  PipelineSingleResult,
+  RecoveredResult,
+  StrategizedResult,
+} from "../services/types.js";
 import { formatCount, formatMoney } from "./format.js";
 
 const STATUS_LABELS: Readonly<Record<TransactionStatus, string>> = {
@@ -363,4 +369,220 @@ export function printRecoveryJson(result: RecoveredResult): void {
       2,
     ),
   );
+}
+
+const SEPARATOR = "─".repeat(24);
+
+function stageLine(label: string, value: string | undefined): string {
+  return value !== undefined ? line(`${label}:`, value, 22) : line(`${label}:`, "—", 22);
+}
+
+export function printPipelineSingle(result: PipelineSingleResult): void {
+  const { result: pipeline } = result;
+  const out: string[] = [];
+
+  out.push("RECOVERAI PIPELINE");
+  out.push("");
+  out.push("Mode:");
+  out.push("  SIMULATION ONLY");
+  out.push("");
+  out.push(line("Transaction:", pipeline.transactionId, 20));
+  out.push(line("Status:", pipeline.status.toUpperCase(), 20));
+  if (pipeline.statusReason) out.push(line("Reason:", pipeline.statusReason, 20));
+
+  out.push("");
+  out.push(SEPARATOR);
+  out.push("");
+  out.push("Detection");
+  out.push("");
+  out.push(stageLine("Detected", pipeline.detection ? String(pipeline.detection.result.detected) : undefined));
+  out.push(stageLine("Actionable", pipeline.detection ? String(pipeline.detection.result.actionable) : undefined));
+  out.push(stageLine("Severity", pipeline.detection?.result.severity));
+
+  if (pipeline.prioritization) {
+    out.push("");
+    out.push(SEPARATOR);
+    out.push("");
+    out.push("Prioritization");
+    out.push("");
+    out.push(stageLine("Priority", pipeline.prioritization.result.priority));
+    out.push(stageLine("Score", String(pipeline.prioritization.result.score)));
+  }
+
+  if (pipeline.diagnosis) {
+    out.push("");
+    out.push(SEPARATOR);
+    out.push("");
+    out.push("Diagnosis");
+    out.push("");
+    out.push(stageLine("Category", pipeline.diagnosis.diagnosis.category));
+    out.push(stageLine("Confidence", `${Math.round(pipeline.diagnosis.diagnosis.confidence * 100)}%`));
+    out.push(stageLine("Mode", pipeline.diagnosis.meta.mode));
+  }
+
+  if (pipeline.strategy) {
+    out.push("");
+    out.push(SEPARATOR);
+    out.push("");
+    out.push("Strategy");
+    out.push("");
+    out.push(stageLine("Selected", pipeline.strategy.decision.strategy));
+    out.push(
+      stageLine("Human approval", pipeline.strategy.decision.requiresHumanApproval ? "required" : "not required"),
+    );
+    out.push(stageLine("Mode", pipeline.strategy.meta.mode));
+  }
+
+  if (pipeline.execution) {
+    out.push("");
+    out.push(SEPARATOR);
+    out.push("");
+    out.push("Recovery Simulation");
+    out.push("");
+    out.push(stageLine("Action", pipeline.execution.result.action));
+    out.push(stageLine("Outcome", pipeline.execution.result.outcome));
+    out.push("");
+    out.push("SIMULATED RECOVERY:");
+    out.push(`  ${formatMoney(pipeline.execution.result.recoveredAmount)}`);
+  }
+
+  if (pipeline.verification) {
+    out.push("");
+    out.push(SEPARATOR);
+    out.push("");
+    out.push("Verification");
+    out.push("");
+    out.push(stageLine("Result", pipeline.verification.verification.verified ? "PASSED" : "FAILED"));
+  }
+
+  out.push("");
+  out.push(SEPARATOR);
+  out.push("");
+  out.push("No real money was moved. All figures above are SIMULATED.");
+
+  console.info(out.join("\n"));
+}
+
+export function printPipelineSingleJson(result: PipelineSingleResult): void {
+  console.info(JSON.stringify({ result: result.result, simulated: true }, null, 2));
+}
+
+export function printPipelineBatch(result: PipelineBatchResult): void {
+  const { batch } = result;
+  const { metrics } = batch;
+  const out: string[] = [];
+
+  out.push("RECOVERAI BATCH RECOVERY");
+  out.push("");
+  out.push("Mode:");
+  out.push("  SIMULATION ONLY");
+  out.push("");
+  out.push(`File: ${basename(result.file)}`);
+  out.push("");
+  out.push(`Transactions processed: ${formatCount(batch.total)}`);
+
+  let ignored = 0;
+  let detectionBlocked = 0;
+  let actionable = 0;
+  for (const pipelineResult of batch.results) {
+    const detected = pipelineResult.detection?.result.detected;
+    const act = pipelineResult.detection?.result.actionable;
+    if (!detected) ignored++;
+    else if (!act) detectionBlocked++;
+    else actionable++;
+  }
+
+  out.push("");
+  out.push(SEPARATOR);
+  out.push("");
+  out.push("Detection");
+  out.push("");
+  out.push(line("Actionable:", formatCount(actionable), 14));
+  out.push(line("Ignored:", formatCount(ignored), 14));
+  out.push(line("Blocked:", formatCount(detectionBlocked), 14));
+
+  out.push("");
+  out.push(SEPARATOR);
+  out.push("");
+  out.push("Prioritization");
+  out.push("");
+  out.push(line("Critical:", formatCount(metrics.priorityBreakdown.critical), 14));
+  out.push(line("High:", formatCount(metrics.priorityBreakdown.high), 14));
+  out.push(line("Medium:", formatCount(metrics.priorityBreakdown.medium), 14));
+  out.push(line("Low:", formatCount(metrics.priorityBreakdown.low), 14));
+
+  const diagnosisEntries = Object.entries(metrics.diagnosisBreakdown).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0));
+  if (diagnosisEntries.length > 0) {
+    out.push("");
+    out.push(SEPARATOR);
+    out.push("");
+    out.push("Diagnosis");
+    out.push("");
+    for (const [category, count] of diagnosisEntries) {
+      out.push(line(`${category}:`, formatCount(count ?? 0), 22));
+    }
+  }
+
+  const strategyEntries = Object.entries(metrics.strategyBreakdown).sort(([, a], [, b]) => (b ?? 0) - (a ?? 0));
+  if (strategyEntries.length > 0) {
+    out.push("");
+    out.push(SEPARATOR);
+    out.push("");
+    out.push("Strategy");
+    out.push("");
+    for (const [strategy, count] of strategyEntries) {
+      out.push(line(`${strategy}:`, formatCount(count ?? 0), 22));
+    }
+  }
+
+  out.push("");
+  out.push(SEPARATOR);
+  out.push("");
+  out.push("Recovery Simulation");
+  out.push("");
+  const executed = metrics.executionBreakdown.success + metrics.executionBreakdown.failure;
+  out.push(line("Executed:", formatCount(executed), 20));
+  out.push(line("Blocked:", formatCount(metrics.executionBreakdown.blocked), 20));
+  if (metrics.executionBreakdown.pending > 0) {
+    out.push(line("Pending approval:", formatCount(metrics.executionBreakdown.pending), 20));
+  }
+  if (metrics.executionBreakdown.not_executed > 0) {
+    out.push(line("No action:", formatCount(metrics.executionBreakdown.not_executed), 20));
+  }
+  out.push("");
+  out.push(line("Simulated successes:", formatCount(metrics.executionBreakdown.success), 20));
+  out.push(line("Simulated failures:", formatCount(metrics.executionBreakdown.failure), 20));
+
+  out.push("");
+  out.push(SEPARATOR);
+  out.push("");
+  out.push("SIMULATED RECOVERY");
+  out.push("");
+  out.push("Revenue at risk:");
+  out.push(`  ${formatMoney(metrics.revenueAtRisk)}`);
+  out.push("");
+  out.push("Simulated recovered:");
+  out.push(`  ${formatMoney(metrics.simulatedRecoveredAmount)}`);
+  out.push("");
+  out.push("Simulation recovery rate:");
+  out.push(`  ${metrics.simulationRecoveryRate.toFixed(1)}%`);
+
+  out.push("");
+  out.push(SEPARATOR);
+  out.push("");
+  out.push("Verification");
+  out.push("");
+  out.push(line("Passed:", formatCount(metrics.verificationPassed), 14));
+  out.push(line("Failed:", formatCount(metrics.verificationFailed), 14));
+
+  out.push("");
+  out.push(SEPARATOR);
+  out.push("");
+  out.push("No real money was moved. All figures above are SIMULATED — not confirmed recovered revenue.");
+
+  console.info(out.join("\n"));
+}
+
+export function printPipelineBatchJson(result: PipelineBatchResult): void {
+  console.info(JSON.stringify({ file: result.file, batch: result.batch, simulated: true }, null, 2));
 }

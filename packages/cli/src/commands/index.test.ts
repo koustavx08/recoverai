@@ -4,6 +4,7 @@ import {
   analyzeCommand,
   ingestCommand,
   initCommand,
+  pipelineCommand,
   recoverCommand,
   reportCommand,
   simulateCommand,
@@ -18,6 +19,7 @@ describe("CLI command registration", () => {
     recover: recoverCommand,
     report: reportCommand,
     agent: agentCommand,
+    pipeline: pipelineCommand,
   };
 
   for (const [name, build] of Object.entries(builders)) {
@@ -27,4 +29,10 @@ describe("CLI command registration", () => {
       expect(command.description().length).toBeGreaterThan(0);
     });
   }
+
+  it("registers a `run` subcommand under `pipeline`", () => {
+    const command = pipelineCommand();
+    const subcommandNames = command.commands.map((sub) => sub.name());
+    expect(subcommandNames).toContain("run");
+  });
 });

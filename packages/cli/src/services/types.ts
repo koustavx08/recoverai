@@ -1,7 +1,9 @@
 import type { IngestionSummary, AnalysisResult } from "@recoverai/analysis";
 import type {
+  BatchPipelineResult,
   Diagnosis,
   DiagnosisExecutionMeta,
+  PipelineResult,
   RecoveryExecutionMeta,
   RecoveryExecutionResult,
   RecoveryVerificationResult,
@@ -11,7 +13,7 @@ import type {
 import type { FailureReasonCode, Money } from "@recoverai/core";
 
 export type CommandName =
-  "init" | "ingest" | "analyze" | "simulate" | "recover" | "report" | "agent";
+  "init" | "ingest" | "analyze" | "simulate" | "recover" | "report" | "agent" | "pipeline";
 
 export interface NotImplementedResult {
   readonly status: "not_implemented";
@@ -79,6 +81,21 @@ export interface RecoveredResult {
   readonly json: boolean;
 }
 
+export interface PipelineSingleResult {
+  readonly status: "pipeline_single";
+  readonly command: "pipeline";
+  readonly result: PipelineResult;
+  readonly json: boolean;
+}
+
+export interface PipelineBatchResult {
+  readonly status: "pipeline_batch";
+  readonly command: "pipeline";
+  readonly file: string;
+  readonly batch: BatchPipelineResult;
+  readonly json: boolean;
+}
+
 export type CommandResult =
   | NotImplementedResult
   | OkResult
@@ -87,7 +104,9 @@ export type CommandResult =
   | AnalyzedResult
   | DiagnosedResult
   | StrategizedResult
-  | RecoveredResult;
+  | RecoveredResult
+  | PipelineSingleResult
+  | PipelineBatchResult;
 
 export function notImplemented(
   command: CommandName,

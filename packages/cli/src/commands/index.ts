@@ -5,3 +5,4 @@ export * from "./simulate.js";
 export * from "./recover.js";
 export * from "./report.js";
 export * from "./agent.js";
+export * from "./pipeline.js";

@@ -5,6 +5,7 @@ import {
   analyzeCommand,
   ingestCommand,
   initCommand,
+  pipelineCommand,
   recoverCommand,
   reportCommand,
   simulateCommand,
@@ -27,6 +28,7 @@ program.addCommand(simulateCommand());
 program.addCommand(recoverCommand());
 program.addCommand(reportCommand());
 program.addCommand(agentCommand());
+program.addCommand(pipelineCommand());
 
 async function main(): Promise<void> {
   try {
