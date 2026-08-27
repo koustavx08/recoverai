@@ -1,5 +1,7 @@
 # RecoverAI
 
+[![CI](https://github.com/koustavx08/recoverai/actions/workflows/ci.yml/badge.svg)](https://github.com/koustavx08/recoverai/actions/workflows/ci.yml)
+
 **AI-powered revenue recovery infrastructure for merchants.**
 
 > **Status: a complete, closed-loop, six-stage recovery pipeline — for one
@@ -49,9 +51,28 @@ RecoverAI's job is to:
 Payment failures are routine at any scale, but most merchants have no
 systematic way to triage them: which failures are worth pursuing, what the
 right recovery action is, and whether attempted recoveries actually worked.
-RecoverAI is designed to be that system — an infrastructure layer that sits
-between "a payment failed" and "someone (or something) should try to
-recover it," with every decision explainable and every action audited.
+A failed payment isn't automatically lost revenue — a meaningful share of
+declines, timeouts, and abandoned checkouts are recoverable — but without
+a system to tell those apart from the ones that aren't, merchants either
+do nothing (leaving recoverable revenue on the table) or retry
+indiscriminately.
+
+**Blind retrying is actively harmful, not just wasteful.** Re-attempting
+every failed charge the same way, regardless of why it failed, burns
+gateway calls on failures that were never retryable (an expired card
+doesn't fix itself), can trip a bank's or processor's own fraud/velocity
+controls (repeated attempts on a declined card are themselves a fraud
+signal), and annoys customers who already said no. This is exactly why
+RecoverAI's Detection stage enforces a hard retry cap and the Recovery
+Execution Policy independently re-checks it (see [§8](#8-agent-architecture)
+and [`docs/security-model.md`](./docs/security-model.md)) — the system is
+built to *stop* trying as much as it is built to try.
+
+RecoverAI is designed to be the system that sits between "a payment
+failed" and "someone (or something) should try to recover it" — deciding
+whether it's worth pursuing, diagnosing why it failed, choosing a bounded
+recovery action, and verifying the result — with every decision
+explainable and every action audited.
 
 ## 3. High-level architecture
 
@@ -68,10 +89,11 @@ recover it," with every decision explainable and every action audited.
               │                     │                     │                     │
    ┌──────────┴─────────┐ ┌─────────┴─────────┐ ┌─────────┴─────────┐ ┌─────────┴─────────┐
    │  packages/agents     │ │ packages/analysis   │ │ packages/database  │ │ packages/integrations│
-   │  detection→diagnosis  │ │ ingest → normalize →│ │ repository ports    │ │ PaymentProvider,     │
-   │  →prioritization→     │ │ classify → score →   │ │ + in-memory impl    │ │ RecoveryActionProvider│
-   │  strategy→recovery→   │ │ prioritize (real,     │ │                     │ │ + simulator/Razorpay  │
-   │  verification (stubs) │ │ deterministic, no AI)  │ │                     │ │                       │
+   │  detection→priorit.→  │ │ ingest → normalize →│ │ repository ports    │ │ PaymentProvider,     │
+   │  diagnosis→strategy→  │ │ classify → score →   │ │ + in-memory impl    │ │ RecoveryActionProvider│
+   │  recovery→verification│ │ prioritize (real,     │ │                     │ │ + simulator/Razorpay  │
+   │  (all six implemented,│ │ deterministic, no AI)  │ │                     │ │  stub, no live path)  │
+   │  SIMULATION-only exec) │ │                        │ │                     │ │                       │
    └──────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘
               │                     │                     │                     │
               └─────────────────────┴─────────────────────┴─────────────────────┘
@@ -96,10 +118,10 @@ depend on `analysis`'s output later, not the other way around.
 ```text
 recoverai/
 ├── apps/
-│   └── web/                # Next.js merchant dashboard (dashboard route reads live analysis)
-│       ├── app/             # dashboard, transactions, recovery, audit-log
-│       ├── components/      # layout shell + shadcn-style UI primitives
-│       └── lib/
+│   └── web/                # Next.js merchant dashboard — every route reads real data
+│       ├── app/             # dashboard, transactions, recovery, demo, audit-log
+│       ├── components/      # layout shell (incl. mobile nav) + UI primitives
+│       └── lib/              # server-only data loaders, one per route
 │
 ├── packages/
 │   ├── core/                # domain models, enums, repository/system ports
@@ -116,11 +138,15 @@ recoverai/
 │
 ├── data/
 │   ├── samples/                  # hand-authored deterministic fixtures (JSON + CSV)
-│   └── generated/                 # output of scripts/generate-sample-data.ts (gitignored)
+│   ├── demo/                      # 5-case curated demo dataset (scenarios.json)
+│   ├── evaluation/                 # ground-truth cases for the 4 evaluate:* harnesses
+│   └── generated/                   # output of scripts/generate-sample-data.ts (gitignored)
 │
-├── docs/                            # docs/risk-scoring.md, docs/agent-architecture.md
-├── scripts/                        # generate-sample-data.ts
-├── tests/                           # cross-package/integration tests
+├── docs/                            # risk-scoring.md, agent-architecture.md,
+│                                       security-model.md, e2e-testing.md
+├── scripts/                        # generate-sample-data.ts, evaluate-*.ts
+├── tests/                           # cross-package/integration/E2E-CLI tests
+├── .github/workflows/               # ci.yml — typecheck/lint/test/build on every push
 ├── .env.example
 └── pnpm-workspace.yaml
 ```
@@ -261,6 +287,43 @@ Recovery Execution — do it, in SIMULATION only                                
     ▼
 Verification       — did the simulated attempt look internally valid?               [implemented — DeterministicVerificationAgent]
 ```
+
+The diagram above shows the six stages in sequence; it doesn't show what
+actually determines a transaction's fate — the branch points. This does,
+and matches `RecoveryPipeline.run()`'s real control flow exactly (see
+`packages/agents/src/orchestration/recovery-pipeline.ts`):
+
+```mermaid
+flowchart TD
+    A[Transaction] --> B{Detection}
+    B -->|not detected<br/>e.g. already succeeded| S1[/status: skipped/]
+    B -->|detected, not actionable<br/>non-retryable or retry cap hit| S2[/status: blocked/]
+    B -->|detected, actionable| C[Prioritization]
+    C --> D[Diagnosis]
+    D --> E[Strategy Selection]
+    E --> F{Recovery Execution Policy}
+    F -->|manual_review, or policy-blocked| S2
+    F -->|requires human approval| S3[/status: blocked<br/>outcome: pending/]
+    F -->|strategy is no_action| S4[/status: skipped<br/>outcome: not_executed/]
+    F -->|allowed, no approval needed| G[Simulated Recovery Execution]
+    G --> H{Verification}
+    H -->|failed| S5[/status: failed/]
+    H -->|passed| S6[/status: completed/]
+
+    classDef skip fill:#6b7280,stroke:#4b5563,color:#fff
+    classDef block fill:#d97706,stroke:#b45309,color:#fff
+    classDef done fill:#16a34a,stroke:#15803d,color:#fff
+    classDef fail fill:#dc2626,stroke:#b91c1c,color:#fff
+    class S1,S4 skip
+    class S2,S3 block
+    class S6 done
+    class S5 fail
+```
+
+Every terminal box above is a real `PipelineStatus` value
+(`completed | blocked | skipped | failed`) — the pipeline never throws
+for any of these; each becomes a structured `PipelineResult` instead
+(see `docs/e2e-testing.md` for tests exercising every branch shown here).
 
 **All six stages are now real, implemented agents** — no stub, no
 `AgentNotImplementedError` anywhere in this pipeline. Each stage is defined
@@ -416,6 +479,16 @@ pnpm typecheck
 pnpm lint
 pnpm test
 
+# true end-to-end coverage: builds, then spawns the real CLI binary
+# (see docs/e2e-testing.md)
+pnpm test:e2e
+
+# accuracy against synthetic ground-truth cases, computed from real runs
+pnpm evaluate:diagnosis
+pnpm evaluate:strategy
+pnpm evaluate:recovery
+pnpm evaluate:pipeline
+
 # run the web dashboard
 pnpm dev:web        # http://localhost:3000
 
@@ -542,11 +615,22 @@ problem — it does not fail silently or fall back to defaults in production.
   fabricated chart or number, and every recovery figure explicitly
   SIMULATED. `/demo` is a fifth route: five hand-picked, narrated cases
   (`data/demo/scenarios.json`) each rendered as a card walking through
-  every stage the real pipeline ran for it — chosen specifically to show
-  a success, a skip, a Detection-level block, a policy-level block, and a
-  pending-approval case side by side, all from real pipeline runs. The
-  remaining two routes (transactions, audit log) are still empty-state
-  placeholders.
+  every stage the real pipeline ran for it — including the real
+  `Diagnosis.explanation`/`StrategyDecision.rationale` sentences, not just
+  the outcome label — chosen specifically to show a success, a skip, a
+  Detection-level block, a policy-level block, and a pending-approval case
+  side by side, all from real pipeline runs. A four-tile **Act / Wait /
+  Block / Escalate** legend at the top links to the case that demonstrates
+  each. `/transactions` and `/audit-log` are real too, not placeholders:
+  `/transactions` lists the ingested sample dataset with status filter
+  chips and drill-down links into `/dashboard/diagnosis/[id]` for every
+  failed/abandoned transaction; `/audit-log` derives real `AuditEvent`
+  rows (one per stage that ran, per transaction) from an actual
+  `RecoveryPipeline` batch run — nothing on either route is fabricated for
+  display. Every route also has a route-shaped loading skeleton
+  (`loading.tsx`), and the app has a styled `error.tsx`/`not-found.tsx`
+  and a mobile-responsive slide-in navigation drawer below the `md`
+  breakpoint (no new dependency — a small React context).
 - Deterministic sample data: `data/samples/transactions.json` (rich) and
   `data/samples/transactions.csv` (flat), covering successful payments,
   issuer declines, insufficient funds, UPI failures, network timeouts,
@@ -568,18 +652,48 @@ problem — it does not fail silently or fall back to defaults in production.
   invalid outputs, verification failures, and same-seed simulation
   consistency. All four compute real results from an actual run against
   the real agents; none hardcode a result.
-- 376+ Vitest tests across 47+ files: domain types, config validation, the
+- 405+ Vitest tests across 53+ files: domain types, config validation, the
   payment simulator's determinism, ingestion (valid/malformed JSON+CSV),
   every failure classification category, risk/recoverability scoring
   bounds and behavior, prioritization ordering, dataset-generator
   determinism, CLI command/service wiring, the full diagnosis/strategy/
-  recovery agent suites, and — new this phase — detection (every
-  detected/actionable rule), prioritization (every factor), the full
-  `RecoveryPipeline` (successful/skipped/blocked/manual-review/
-  verification-failure paths, stage-metadata preservation, never throwing),
-  and `BatchRecoveryPipeline` (mixed outcomes, deterministic aggregation,
-  metrics consistency) — no real API or network calls in any automated
-  test.
+  recovery agent suites, detection (every detected/actionable rule),
+  prioritization (every factor), the full `RecoveryPipeline`
+  (successful/skipped/blocked/manual-review/verification-failure paths,
+  stage-metadata preservation, never throwing), `BatchRecoveryPipeline`
+  (mixed outcomes, deterministic aggregation, metrics consistency), the
+  web dashboard's server-only data loaders (`apps/web/lib/*.test.ts` —
+  demo scenario outcomes, transaction filtering, audit-trail shape,
+  against a real pipeline run, not rendered markup), and a secret-redaction
+  suite (`packages/agents/src/security/`) — no real API or network calls
+  in any automated test.
+- **A narratively organized end-to-end suite**
+  (`packages/agents/src/orchestration/pipeline.e2e.test.ts`) running the
+  real `RecoveryPipeline`/`BatchRecoveryPipeline` through the seven
+  scenarios that define RecoverAI's core behavior (success, skip,
+  Detection-level block, policy-level block, pending approval,
+  retry-limit block, and verification catching a malformed result), plus
+  **`tests/e2e-cli.test.ts`**, which spawns the actual built `recoverai`
+  binary as a real child process (not the exported service function
+  in-process) to verify the CLI itself — argv, stdout, exit code — behaves
+  correctly, including that `recover --live` exits non-zero having done no
+  work. See [`docs/e2e-testing.md`](./docs/e2e-testing.md); run
+  deliberately with `pnpm test:e2e`.
+- **A GitHub Actions CI workflow** (`.github/workflows/ci.yml`) running
+  build → typecheck → lint → test on every push/PR to `main` — no secrets
+  required, since every check runs against the deterministic fallback
+  path.
+- **A code-verified security and architecture review**
+  ([`docs/security-model.md`](./docs/security-model.md)) — not just
+  documentation of intent, but an adversarial pass over the actual
+  implementation: AI-output validation, the single execution-policy gate,
+  three independent retry-limit checks, simulation-mode guarantees,
+  verification independence, and audit/secret handling. It found and
+  fixed one real issue (AI provider error messages were stored verbatim
+  in `fallbackReason`, reaching the audit trail and dashboard unredacted —
+  now redacted for credential-shaped substrings) and confirmed everything
+  else already correctly enforced, with reasoning for each recorded in
+  the doc, not just asserted.
 
 **Explicitly NOT implemented (by design, at this stage):**
 
@@ -611,6 +725,11 @@ problem — it does not fail silently or fall back to defaults in production.
   exiting.)
 - `init`, `simulate`, `report`, and every `agent` stage other than
   `diagnosis`/`strategy` are still stubs.
+- **No authentication or multi-tenant isolation on the dashboard.** There
+  is no login and no per-merchant access control — anyone who can reach
+  `apps/web` can see every ingested transaction and diagnosis. Fine for a
+  local demo, not for anything resembling production — see
+  [`docs/security-model.md`](./docs/security-model.md#known-limitations).
 
 ## 12. Planned implementation phases
 
