@@ -1,8 +1,15 @@
-import { ingestFile, type NormalizedTransaction } from "@recoverai/analysis";
+import type { NormalizedTransaction } from "@recoverai/analysis";
 import { BatchRecoveryPipeline, RecoveryPipeline, type PipelineResult } from "@recoverai/agents";
-import { createInMemoryDatabase } from "@recoverai/database";
+import { createPrismaDatabase } from "@recoverai/database";
 import { brand, type AuditEvent, type Logger } from "@recoverai/core";
-import { buildFactsList, buildPipelineAgents, repoDataPath, resolveProvider } from "./pipeline-runtime";
+import {
+  buildFactsList,
+  buildPipelineAgents,
+  loadPersistedTransactions,
+  PERSISTED_SOURCE_LABEL,
+  repoDataPath,
+  resolveProvider,
+} from "./pipeline-runtime";
 
 const SAMPLE_DATA_PATH = repoDataPath("samples", "transactions.json");
 
@@ -126,19 +133,20 @@ export interface AuditTrailView {
 }
 
 /**
- * Server-only: runs the real `RecoveryPipeline` over the bundled sample
- * dataset and derives the audit trail every stage that ran would have
- * produced — the same shape `recoverai pipeline run` and `recoverai
- * recover` persist via `AuditEventRepository`, just computed fresh per
- * request since there is no cross-process store yet.
+ * Server-only: runs the real `RecoveryPipeline` over every transaction
+ * persisted to the durable store (the bundled sample dataset, seeded on
+ * every call, plus anything separately ingested via `recoverai ingest`)
+ * and derives the audit trail every stage that ran would have produced —
+ * the same shape `recoverai pipeline run` and `recoverai recover` persist
+ * via `AuditEventRepository`. This view is still computed fresh per
+ * request (not read back from `AuditEventRepository` itself) — a page
+ * load is not recorded as a permanent audit event, which would make every
+ * refresh a new "real" entry.
  */
 export async function loadAuditTrail(): Promise<AuditTrailView | null> {
   try {
-    const db = createInMemoryDatabase();
-    const { transactions } = await ingestFile({
-      filePath: SAMPLE_DATA_PATH,
-      repository: db.transactions,
-    });
+    const db = createPrismaDatabase();
+    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH);
     if (transactions.length === 0) return null;
 
     const provider = resolveProvider();
@@ -157,7 +165,7 @@ export async function loadAuditTrail(): Promise<AuditTrailView | null> {
 
     const sorted = [...events].sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
 
-    return { file: "data/samples/transactions.json", events: sorted };
+    return { file: PERSISTED_SOURCE_LABEL, events: sorted };
   } catch {
     return null;
   }

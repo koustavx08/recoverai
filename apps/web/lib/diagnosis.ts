@@ -1,7 +1,6 @@
 import {
   buildCustomerHistoryIndex,
   classifyFailure,
-  ingestFile,
   NEUTRAL_CUSTOMER_HISTORY,
   scoreTransaction,
   type NormalizedTransaction,
@@ -23,7 +22,7 @@ import {
   type StrategyOutcome,
 } from "@recoverai/agents";
 import { loadConfig } from "@recoverai/config";
-import { createInMemoryDatabase } from "@recoverai/database";
+import { createPrismaDatabase } from "@recoverai/database";
 import {
   AnthropicProvider,
   RecoveryExecutionSimulator,
@@ -36,7 +35,7 @@ import type {
   RecoveryStrategyType,
   RevenueRisk,
 } from "@recoverai/core";
-import { repoDataPath } from "./pipeline-runtime";
+import { loadPersistedTransactions, repoDataPath } from "./pipeline-runtime";
 
 const SAMPLE_DATA_PATH = repoDataPath("samples", "transactions.json");
 
@@ -85,19 +84,18 @@ function hasSucceededWithAlternateMethod(
 /**
  * Server-only: runs the same ingestion -> classification -> risk-scoring ->
  * diagnosis -> strategy-selection pipeline the CLI's `agent --stage
- * diagnosis|strategy` commands use, against the bundled sample dataset, for
- * one transaction id. Returns `null` when the transaction isn't in the
- * dataset — the page renders a 404 in that case, nothing is fabricated.
+ * diagnosis|strategy` commands use, against every transaction persisted to
+ * the durable store (the bundled sample dataset, seeded on every call,
+ * plus anything separately ingested via `recoverai ingest`), for one
+ * transaction id. Returns `null` when the transaction isn't found — the
+ * page renders a 404 in that case, nothing is fabricated.
  */
 export async function loadTransactionDiagnosis(
   transactionId: string,
 ): Promise<TransactionDiagnosisView | null> {
   try {
-    const db = createInMemoryDatabase();
-    const { transactions } = await ingestFile({
-      filePath: SAMPLE_DATA_PATH,
-      repository: db.transactions,
-    });
+    const db = createPrismaDatabase();
+    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH);
 
     const transaction = transactions.find((t) => t.id === transactionId);
     if (!transaction) return null;

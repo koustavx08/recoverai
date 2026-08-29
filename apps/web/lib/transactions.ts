@@ -1,7 +1,7 @@
-import { ingestFile, type NormalizedTransaction } from "@recoverai/analysis";
-import { createInMemoryDatabase } from "@recoverai/database";
+import type { NormalizedTransaction } from "@recoverai/analysis";
+import { createPrismaDatabase } from "@recoverai/database";
 import type { TransactionStatus } from "@recoverai/core";
-import { repoDataPath } from "./pipeline-runtime";
+import { loadPersistedTransactions, repoDataPath } from "./pipeline-runtime";
 
 const SAMPLE_DATA_PATH = repoDataPath("samples", "transactions.json");
 
@@ -27,19 +27,18 @@ const EMPTY_STATUS_COUNTS: Record<TransactionStatus, number> = {
 };
 
 /**
- * Server-only: ingests the bundled sample dataset and returns it (optionally
- * filtered to one status), newest first. Real ingested data only — nothing
- * here is generated or estimated.
+ * Server-only: returns every transaction ever persisted to the durable
+ * store (the bundled sample dataset, seeded on every call, plus anything
+ * separately ingested via `recoverai ingest`) — optionally filtered to one
+ * status, newest first. Real ingested data only — nothing here is
+ * generated or estimated.
  */
 export async function loadTransactionList(
   statusFilter?: TransactionStatus,
 ): Promise<TransactionListView | null> {
   try {
-    const db = createInMemoryDatabase();
-    const { transactions } = await ingestFile({
-      filePath: SAMPLE_DATA_PATH,
-      repository: db.transactions,
-    });
+    const db = createPrismaDatabase();
+    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH);
     if (transactions.length === 0) return null;
 
     const statusCounts = { ...EMPTY_STATUS_COUNTS };

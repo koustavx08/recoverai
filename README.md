@@ -90,7 +90,7 @@ explainable and every action audited.
    ┌──────────┴─────────┐ ┌─────────┴─────────┐ ┌─────────┴─────────┐ ┌─────────┴─────────┐
    │  packages/agents     │ │ packages/analysis   │ │ packages/database  │ │ packages/integrations│
    │  detection→priorit.→  │ │ ingest → normalize →│ │ repository ports    │ │ PaymentProvider,     │
-   │  diagnosis→strategy→  │ │ classify → score →   │ │ + in-memory impl    │ │ RecoveryActionProvider│
+   │  diagnosis→strategy→  │ │ classify → score →   │ │ + in-memory/SQLite  │ │ RecoveryActionProvider│
    │  recovery→verification│ │ prioritize (real,     │ │                     │ │ + simulator/Razorpay  │
    │  (all six implemented,│ │ deterministic, no AI)  │ │                     │ │  stub, no live path)  │
    │  SIMULATION-only exec) │ │                        │ │                     │ │                       │
@@ -134,7 +134,7 @@ recoverai/
 │   │   └── src/{agents,orchestration,tools}
 │   ├── integrations/           # PaymentProvider / RecoveryActionProvider
 │   │   └── src/{interfaces,simulator,razorpay}
-│   └── database/                # repository implementations (in-memory today)
+│   └── database/                # repository implementations (in-memory + SQLite/Prisma)
 │
 ├── data/
 │   ├── samples/                  # hand-authored deterministic fixtures (JSON + CSV)
@@ -208,10 +208,10 @@ recoverai pipeline run --file data/demo/scenarios.json         # 5 curated demo 
 recoverai pipeline run --transaction demo_txn_04 --file data/demo/scenarios.json  # one case, full walkthrough
 ```
 
-`ingest`, `analyze`, `agent`, `recover`, and `pipeline` each start from a
-fresh in-memory store per invocation — see
-[Current project status](#current-project-status) for why there's no
-cross-process persistence yet. `init`, `simulate`, `report`, and every
+`ingest`, `analyze`, `agent`, `recover`, and `pipeline` all read and write
+through the same durable, SQLite-backed store (`packages/database`'s
+`createPrismaDatabase()`) — data ingested in one invocation is visible to
+the next. `init`, `simulate`, `report`, and every
 `agent` stage other than `diagnosis`/`strategy` still validate their
 arguments for real but return "Not implemented yet." for the actual
 operation. `recover` and `pipeline` always run in simulation mode;
@@ -532,8 +532,11 @@ problem — it does not fail silently or fall back to defaults in production.
 - Monorepo structure, strict TypeScript config, ESLint, Prettier.
 - `@recoverai/core`: domain models, enums, and repository/system ports.
 - `@recoverai/config`: typed, Zod-validated environment configuration.
-- `@recoverai/database`: repository interfaces + an in-memory implementation
-  (now including `findAll()`, used by batch analysis).
+- `@recoverai/database`: repository interfaces + two implementations — an
+  in-memory one (tests, isolated demo runs) and a durable SQLite-backed
+  one via Prisma (`createPrismaDatabase()`, `packages/database/src/prisma/`),
+  used by both the CLI and the dashboard for real, cross-process
+  persistence.
 - `@recoverai/analysis` **(new)**: a real, deterministic pipeline —
   ingest JSON or CSV, validate and normalize records, classify why a
   payment failed, score risk/recoverability, and rank recovery candidates.
@@ -721,15 +724,21 @@ problem — it does not fail silently or fall back to defaults in production.
   simulation or left to fail unpredictably; there is no approval-granting
   mechanism yet, so every strategy that `requiresHumanApproval` resolves
   to `pending`, never to an auto-approved execution.
-- **No dashboard-level persistence yet.** The CLI (`ingest`, `analyze`,
-  `agent`, `recover`, `pipeline run`) now writes through
-  `createPrismaDatabase()` — a SQLite-backed `Database` implementation
-  (`packages/database/src/prisma/`) — so ingested transactions and every
-  agent decision (diagnosis/strategy audit events, `RecoveryAction`
-  records, verification results) survive across separate CLI invocations.
-  The web dashboard (`apps/web/lib/*`) still recomputes from the bundled
-  sample dataset into a fresh in-memory store on every request — wiring it
-  to the same persistent store is Phase 8 below.
+- **The dashboard doesn't record its own page views as audit/execution
+  history.** Both the CLI (`ingest`, `analyze`, `agent`, `recover`,
+  `pipeline run`) and the dashboard (`apps/web/lib/*`) now read and write
+  through the same `createPrismaDatabase()` store
+  (`packages/database/src/prisma/`), so ingested transactions are real,
+  shared, and durable — `/transactions`, `/dashboard`, `/recovery`, the
+  diagnosis drill-down, and `/audit-log` all show the accumulated store
+  (the bundled sample dataset, seeded idempotently, plus anything
+  separately ingested via `recoverai ingest`), not a fresh recompute of
+  one static file. What the dashboard does *not* do is write its own
+  live pipeline runs back into `RecoveryActionRepository`/
+  `AuditEventRepository` — those stay real-time-computed-but-unrecorded on
+  every view, deliberately, so that loading a page (a GET request) never
+  creates a permanent audit-log/recovery-action entry. Only the CLI's
+  explicit `recover`/`pipeline run`/`agent` commands write those.
 - `init`, `simulate`, `report`, and every `agent` stage other than
   `diagnosis`/`strategy` are still stubs.
 - **No authentication or multi-tenant isolation on the dashboard.** There
@@ -764,23 +773,33 @@ problem — it does not fail silently or fall back to defaults in production.
    `BatchRecoveryPipeline` with deterministic portfolio metrics — wired
    into `recoverai pipeline run` and the `/recovery` dashboard, with its
    own evaluation harness (`pnpm evaluate:pipeline`).
-6. ~~**Persistence**~~ — ✅ done (CLI-side): `createPrismaDatabase()`
+6. ~~**Persistence**~~ — ✅ done: `createPrismaDatabase()`
    (`packages/database/src/prisma/`) implements the existing `Database`
    shape over SQLite via Prisma, so ingested data and every agent decision
    (diagnosis, strategy, simulated execution, verification) now survive
    across CLI invocations — see `pnpm db:generate`/`pnpm db:migrate` in
    [§9](#9-local-development-setup). Swapping to Postgres later only needs a new
-   `datasource` provider/`DATABASE_URL`, not a caller change. The web
-   dashboard is not wired to it yet — that's Phase 8.
+   `datasource` provider/`DATABASE_URL`, not a caller change.
 7. **Real recovery execution** — implement a live `RecoveryActionProvider`
    (e.g. real email/SMS/WhatsApp senders, a real payment-link generator)
    behind the same `RecoveryAgent` interface the simulator already
    implements, gated by an actual human-approval mechanism for every
    strategy that `requiresHumanApproval` — turning today's `pending`
    outcome into a real, audited action for the first time.
-8. **Full dashboard data wiring** — connect the remaining routes
-   (transactions, recovery activity, audit log) to real ingested/analyzed/
-   executed data, replacing today's per-request in-memory recomputation.
+8. ~~**Full dashboard data wiring**~~ — ✅ done: `apps/web/lib/*` reads
+   transactions from the same `createPrismaDatabase()` store the CLI
+   writes to (via the shared `loadPersistedTransactions()` helper in
+   `apps/web/lib/pipeline-runtime.ts`), seeded idempotently from the
+   bundled sample dataset — replacing the old per-request/per-build
+   in-memory recompute of one static file. `/transactions`, `/dashboard`
+   (analysis), `/recovery` (portfolio pipeline), the diagnosis drill-down,
+   and `/audit-log` all reflect the real, accumulated store. Live pipeline
+   runs on these pages are still computed fresh per view rather than
+   written back to `RecoveryActionRepository`/`AuditEventRepository` — see
+   the "Explicitly NOT implemented" note above on why that's deliberate.
+   `/demo` is unaffected by design: its curated scenarios (and their
+   `demo_history_support` fixture transactions) run against an isolated
+   in-memory store so they never leak into the real one.
 9. **Real Razorpay integration** — implement `RazorpayPaymentProvider` /
    `RazorpayRecoveryActionProvider` behind the existing interfaces, with no
    changes required to the domain layer or agents — the same interface
