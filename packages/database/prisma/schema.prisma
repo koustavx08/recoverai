@@ -1,0 +1,125 @@
+// Prisma schema for RecoverAI's persistent (SQLite) backing store.
+//
+// SQLite has no native enum or JSON type support in Prisma, so every
+// domain enum (TransactionStatus, RecoveryStrategyType, ...) and every
+// Metadata blob is stored as a plain String column and (de)serialized at
+// the repository boundary — see src/prisma/mappers.ts. Money values are
+// split into an integer `amount` (smallest currency unit) + `currency`
+// column pair, matching @recoverai/core's `Money` shape.
+//
+// There are deliberately no foreign-key relations between tables: nothing
+// in this codebase persists Merchant/Customer records today (only
+// Transaction, RevenueRisk, RecoveryAction, and AuditEvent are actually
+// written), so FK constraints on merchantId/customerId would fail in
+// normal use. This mirrors the in-memory implementation, which also
+// enforces no referential integrity between repositories.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id              String  @id
+  name            String
+  email           String
+  websiteUrl      String?
+  defaultCurrency String
+  createdAt       String
+  metadata        String?
+}
+
+model Customer {
+  id         String  @id
+  merchantId String
+  email      String?
+  phone      String?
+  name       String?
+  createdAt  String
+  metadata   String?
+
+  @@index([merchantId])
+}
+
+model Transaction {
+  id            String  @id
+  merchantId    String
+  customerId    String
+  amount        Int
+  currency      String
+  status        String
+  paymentMethod String
+  createdAt     String
+  updatedAt     String
+  metadata      String?
+
+  attempts PaymentAttempt[]
+
+  @@index([merchantId])
+}
+
+model PaymentAttempt {
+  id                   String  @id
+  transactionId        String
+  /** Preserves array order from the domain `Transaction.attempts` list. */
+  sequence             Int
+  status               String
+  paymentMethod        String
+  failureReasonCode    String?
+  providerErrorMessage String?
+  attemptedAt          String
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+}
+
+model RevenueRisk {
+  transactionId             String @id
+  riskScore                 Float
+  recoverabilityScore       Float
+  expectedRecoveryAmount    Int
+  expectedRecoveryCurrency  String
+  failureReasonCode         String
+  failureReasonDescription  String
+  failureReasonRecoverable  Boolean
+  failureReasonSeverity     String
+  failureReasonConfidence   Float
+  /** JSON-encoded string array. */
+  failureReasonEvidence     String
+  priority                  String
+  recommendedStrategy       String
+  explanation               String
+  assessedAt                String
+}
+
+model RecoveryAction {
+  id            String  @id
+  transactionId String
+  type          String
+  strategy      String
+  status        String
+  scheduledAt   String?
+  executedAt    String?
+  metadata      String?
+
+  @@index([transactionId])
+}
+
+model AuditEvent {
+  id            String  @id
+  type          String
+  merchantId    String
+  transactionId String?
+  actorType     String
+  actorId       String
+  summary       String
+  data          String?
+  occurredAt    String
+
+  @@index([merchantId])
+}

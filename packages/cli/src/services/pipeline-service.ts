@@ -4,7 +4,7 @@ import type { AuditEvent, ISODateString, Logger } from "@recoverai/core";
 import { brand } from "@recoverai/core";
 import { ingestFile, type NormalizedTransaction } from "@recoverai/analysis";
 import { BatchRecoveryPipeline, RecoveryPipeline, type PipelineResult } from "@recoverai/agents";
-import { createInMemoryDatabase } from "@recoverai/database";
+import { createPrismaDatabase } from "@recoverai/database";
 import {
   DEFAULT_PIPELINE_FILE,
   buildPipelineAgents,
@@ -71,7 +71,7 @@ export async function runPipeline(options: PipelineRunOptions, logger: Logger): 
 
   const filePath = options.file ?? DEFAULT_PIPELINE_FILE;
   const provider = resolveAIProvider();
-  const db = createInMemoryDatabase();
+  const db = createPrismaDatabase();
 
   let transactions: readonly NormalizedTransaction[];
   try {

@@ -10,6 +10,12 @@ jobs:
   build:
     name: Typecheck, lint, test, build
     runs-on: ubuntu-latest
+    # Absolute path so it resolves identically for the Prisma CLI (migrate,
+    # relative to schema.prisma) and the generated Client at runtime (which
+    # packages/database/src/prisma/client.ts would otherwise compute itself
+    # — setting it here just makes CI's DB location explicit).
+    env:
+      DATABASE_URL: "file:${{ github.workspace }}/packages/database/prisma/dev.db"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +31,15 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Generates the Prisma client (packages/database needs its generated
+      # types to typecheck/build) and applies migrations to a fresh SQLite
+      # file — no external database or secret required.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Apply database migrations
+        run: pnpm db:migrate:deploy
 
       # Workspace packages resolve each other via their built `dist/*.d.ts`
       # (no TS project references), so build must run before typecheck.

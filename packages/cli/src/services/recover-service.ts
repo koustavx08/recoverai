@@ -10,7 +10,7 @@ import {
   type RecoveryVerificationOutcome,
 } from "@recoverai/agents";
 import { RecoveryExecutionSimulator } from "@recoverai/integrations";
-import { createInMemoryDatabase } from "@recoverai/database";
+import { createPrismaDatabase } from "@recoverai/database";
 import type { NormalizedTransaction } from "@recoverai/analysis";
 import {
   DEFAULT_PIPELINE_FILE,
@@ -163,11 +163,12 @@ export async function runRecover(options: RecoverOptions, logger: Logger): Promi
   const verificationAgent = new DeterministicVerificationAgent();
   const verificationOutcome = await verificationAgent.verifyRecovery(executionOutcome.result, { logger });
 
-  const db = createInMemoryDatabase();
+  const db = createPrismaDatabase();
   // Reuses the existing RecoveryActionRepository (unused since Phase 1 —
   // RecoveryAgent was never implemented until now) to persist the
   // execution plan/result via the existing RecoveryAction domain type,
-  // rather than introducing a new repository abstraction for it.
+  // rather than introducing a new repository abstraction for it. Now
+  // durable — see @recoverai/database's Prisma-backed implementation.
   await db.recoveryActions.save(toRecoveryAction(executionOutcome));
   await db.auditEvents.append(
     buildRecoveryExecutionAuditEvent(transaction, recoveryAgent.id, executionOutcome),

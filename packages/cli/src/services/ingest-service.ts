@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Logger } from "@recoverai/core";
 import { ingestFile } from "@recoverai/analysis";
-import { createInMemoryDatabase } from "@recoverai/database";
+import { createPrismaDatabase } from "@recoverai/database";
 import { errorResult, type CommandResult } from "./types.js";
 
 export const ingestOptionsSchema = z.object({
@@ -14,10 +14,9 @@ export type IngestOptions = z.infer<typeof ingestOptionsSchema>;
 /**
  * Reads, validates, and normalizes a transaction file through
  * `@recoverai/analysis`'s ingestion pipeline, persisting valid records via
- * the repository abstraction. Each CLI invocation ingests into a fresh
- * in-memory store — there is no cross-process persistence yet (see
- * README), so this doubles as a validation/preview tool as much as a
- * literal "load" operation.
+ * the repository abstraction into the durable (SQLite-backed) store —
+ * ingested transactions survive across CLI invocations, so a later
+ * `analyze`/`recover` run on the same machine can see them.
  */
 export async function runIngest(
   options: IngestOptions,
@@ -28,7 +27,7 @@ export async function runIngest(
     format: options.format,
   });
 
-  const db = createInMemoryDatabase();
+  const db = createPrismaDatabase();
 
   try {
     const { summary } = await ingestFile({

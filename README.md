@@ -471,6 +471,12 @@ if you don't have it).
 # install dependencies for every workspace package
 pnpm install
 
+# generate the Prisma client and apply migrations — creates
+# packages/database/prisma/dev.db (SQLite, gitignored, no external
+# database required)
+pnpm db:generate
+pnpm db:migrate
+
 # build every package (required before running the CLI's built bin)
 pnpm build
 
@@ -509,7 +515,7 @@ requires no credentials at all**, which is the default.
 
 | Variable                                  | Required when                                                                        |
 | ----------------------------------------- | ------------------------------------------------------------------------------------ |
-| `DATABASE_URL`                            | `NODE_ENV=production` (unused while `packages/database` only has an in-memory store) |
+| `DATABASE_URL`                            | `NODE_ENV=production`; optional otherwise — defaults to a local SQLite file (`packages/database/prisma/dev.db`) if unset |
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | `PAYMENT_PROVIDER=razorpay`                                                          |
 | `AI_API_KEY` / `AI_MODEL`                 | `NODE_ENV=production`; optional otherwise — unset means the Diagnosis/Strategy agents run their deterministic fallback |
 | `NEXT_PUBLIC_APP_URL`                     | always (defaults to `http://localhost:3000`)                                         |
@@ -715,14 +721,15 @@ problem — it does not fail silently or fall back to defaults in production.
   simulation or left to fail unpredictably; there is no approval-granting
   mechanism yet, so every strategy that `requiresHumanApproval` resolves
   to `pending`, never to an auto-approved execution.
-- No persistent database — `@recoverai/database` only has an in-memory
-  store, so `ingest`, `analyze`, `agent`, and `recover` each start fresh
-  per invocation; there is no cross-process persistence yet. (`recover`
-  does persist a `RecoveryAction` record and two `AuditEvent`s per run into
-  that same throwaway in-memory store, via the existing
-  `RecoveryActionRepository`/`AuditEventRepository` — exercising those
-  abstractions for the first time — but nothing survives past the process
-  exiting.)
+- **No dashboard-level persistence yet.** The CLI (`ingest`, `analyze`,
+  `agent`, `recover`, `pipeline run`) now writes through
+  `createPrismaDatabase()` — a SQLite-backed `Database` implementation
+  (`packages/database/src/prisma/`) — so ingested transactions and every
+  agent decision (diagnosis/strategy audit events, `RecoveryAction`
+  records, verification results) survive across separate CLI invocations.
+  The web dashboard (`apps/web/lib/*`) still recomputes from the bundled
+  sample dataset into a fresh in-memory store on every request — wiring it
+  to the same persistent store is Phase 8 below.
 - `init`, `simulate`, `report`, and every `agent` stage other than
   `diagnosis`/`strategy` are still stubs.
 - **No authentication or multi-tenant isolation on the dashboard.** There
@@ -757,12 +764,14 @@ problem — it does not fail silently or fall back to defaults in production.
    `BatchRecoveryPipeline` with deterministic portfolio metrics — wired
    into `recoverai pipeline run` and the `/recovery` dashboard, with its
    own evaluation harness (`pnpm evaluate:pipeline`).
-6. **Persistence** — a real database backend (Postgres via Prisma or
-   Drizzle) implementing the `Database` shape already defined in
-   `@recoverai/database`, so ingested data and every agent decision
-   (diagnosis, strategy, simulated execution, verification) survive across
-   CLI invocations and dashboard requests, instead of each starting from a
-   fresh in-memory store.
+6. ~~**Persistence**~~ — ✅ done (CLI-side): `createPrismaDatabase()`
+   (`packages/database/src/prisma/`) implements the existing `Database`
+   shape over SQLite via Prisma, so ingested data and every agent decision
+   (diagnosis, strategy, simulated execution, verification) now survive
+   across CLI invocations — see `pnpm db:generate`/`pnpm db:migrate` in
+   [§9](#9-local-development-setup). Swapping to Postgres later only needs a new
+   `datasource` provider/`DATABASE_URL`, not a caller change. The web
+   dashboard is not wired to it yet — that's Phase 8.
 7. **Real recovery execution** — implement a live `RecoveryActionProvider`
    (e.g. real email/SMS/WhatsApp senders, a real payment-link generator)
    behind the same `RecoveryAgent` interface the simulator already

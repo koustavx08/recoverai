@@ -27,6 +27,10 @@ coverage/
 data/generated/*
 !data/generated/.gitkeep
 
+# SQLite dev database (packages/database) — schema lives in prisma/migrations, not the file itself
+packages/database/prisma/dev.db
+packages/database/prisma/dev.db-journal
+
 # Local tooling
 .claude/
 

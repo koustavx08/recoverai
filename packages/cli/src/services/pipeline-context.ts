@@ -25,7 +25,7 @@ import {
 } from "@recoverai/agents";
 import { AnthropicProvider, RecoveryExecutionSimulator, type AIModelProvider } from "@recoverai/integrations";
 import { loadConfig } from "@recoverai/config";
-import { createInMemoryDatabase } from "@recoverai/database";
+import { createPrismaDatabase } from "@recoverai/database";
 import { errorResult, type CommandResult, type CommandName } from "./types.js";
 
 /** Used when no --file is given — the canonical, always-available fixture dataset, shared by every stage-based command (`agent`, `recover`). */
@@ -146,7 +146,7 @@ export async function buildDiagnosisContext(
   logger: Logger,
   command: CommandName,
 ): Promise<DiagnosisContext | CommandResult> {
-  const db = createInMemoryDatabase();
+  const db = createPrismaDatabase();
 
   let transactions: readonly NormalizedTransaction[];
   try {
@@ -238,7 +238,7 @@ export async function buildStrategyContext(
     hasSucceededWithAlternateMethod: hasAlternateMethodHistory,
   };
 
-  const db = createInMemoryDatabase();
+  const db = createPrismaDatabase();
   const strategyAgent = new GroundedStrategyAgent({ provider });
   const strategyOutcome = await strategyAgent.selectStrategy(strategyInput, { logger });
   await db.auditEvents.append(buildStrategyAuditEvent(transaction, strategyAgent.id, strategyOutcome));
