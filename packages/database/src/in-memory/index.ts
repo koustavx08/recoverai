@@ -4,3 +4,4 @@ export * from "./merchant-repository.js";
 export * from "./revenue-risk-repository.js";
 export * from "./recovery-action-repository.js";
 export * from "./audit-event-repository.js";
+export * from "./user-repository.js";

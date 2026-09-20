@@ -3,6 +3,7 @@ import type {
   MerchantId,
   RecoveryActionId,
   TransactionId,
+  UserId,
 } from "../types/common.js";
 import type { AuditEvent } from "../domain/audit-event.js";
 import type { Customer } from "../domain/customer.js";
@@ -10,6 +11,7 @@ import type { Merchant } from "../domain/merchant.js";
 import type { RecoveryAction } from "../domain/recovery.js";
 import type { RevenueRisk } from "../domain/revenue-risk.js";
 import type { Transaction } from "../domain/transaction.js";
+import type { User } from "../domain/user.js";
 
 /**
  * Persistence ports the domain layer depends on. Concrete implementations
@@ -48,4 +50,10 @@ export interface RecoveryActionRepository {
 export interface AuditEventRepository {
   findByMerchant(merchantId: MerchantId): Promise<readonly AuditEvent[]>;
   append(event: AuditEvent): Promise<void>;
+}
+
+export interface UserRepository {
+  findById(id: UserId): Promise<User | null>;
+  findByEmail(email: string): Promise<User | null>;
+  save(user: User): Promise<void>;
 }

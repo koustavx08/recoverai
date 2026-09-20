@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { loadAuditTrail } from "@/lib/audit";
 import { formatDateTime } from "@/lib/format";
+import { requireMerchantId } from "@/lib/session";
 import type { AuditEventType } from "@recoverai/core";
 
 const EVENT_BADGE_VARIANT: Readonly<Record<AuditEventType, BadgeProps["variant"]>> = {
@@ -19,7 +20,8 @@ const EVENT_BADGE_VARIANT: Readonly<Record<AuditEventType, BadgeProps["variant"]
 };
 
 export default async function AuditLogPage() {
-  const view = await loadAuditTrail();
+  const merchantId = await requireMerchantId();
+  const view = await loadAuditTrail(merchantId);
 
   return (
     <>

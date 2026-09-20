@@ -5,6 +5,7 @@ import type {
   RecoveryActionRepository,
   RevenueRiskRepository,
   TransactionRepository,
+  UserRepository,
 } from "@recoverai/core";
 import {
   InMemoryAuditEventRepository,
@@ -13,6 +14,7 @@ import {
   InMemoryRecoveryActionRepository,
   InMemoryRevenueRiskRepository,
   InMemoryTransactionRepository,
+  InMemoryUserRepository,
 } from "./in-memory/index.js";
 import {
   getPrismaClient,
@@ -22,6 +24,7 @@ import {
   PrismaRecoveryActionRepository,
   PrismaRevenueRiskRepository,
   PrismaTransactionRepository,
+  PrismaUserRepository,
 } from "./prisma/index.js";
 
 /** Aggregate handle to every repository RecoverAI needs. */
@@ -32,6 +35,7 @@ export interface Database {
   readonly revenueRisks: RevenueRiskRepository;
   readonly recoveryActions: RecoveryActionRepository;
   readonly auditEvents: AuditEventRepository;
+  readonly users: UserRepository;
 }
 
 /**
@@ -48,6 +52,7 @@ export function createInMemoryDatabase(): Database {
     revenueRisks: new InMemoryRevenueRiskRepository(),
     recoveryActions: new InMemoryRecoveryActionRepository(),
     auditEvents: new InMemoryAuditEventRepository(),
+    users: new InMemoryUserRepository(),
   };
 }
 
@@ -70,5 +75,6 @@ export function createPrismaDatabase(): Database {
     revenueRisks: new PrismaRevenueRiskRepository(client),
     recoveryActions: new PrismaRecoveryActionRepository(client),
     auditEvents: new PrismaAuditEventRepository(client),
+    users: new PrismaUserRepository(client),
   };
 }

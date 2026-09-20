@@ -514,7 +514,8 @@ pnpm evaluate:strategy
 pnpm evaluate:recovery
 pnpm evaluate:pipeline
 
-# run the web dashboard
+# run the web dashboard — requires apps/web/.env.local with AUTH_SECRET set
+# (see §10); redirects to /login, where the demo credentials are shown
 pnpm dev:web        # http://localhost:3000
 
 # run the CLI
@@ -532,8 +533,17 @@ See [`.env.example`](./.env.example) for the full, commented list. Copy it
 to `.env` and fill in only what you need — **the simulator provider
 requires no credentials at all**, which is the default.
 
+**`apps/web` needs its own `.env.local`** (Next.js loads env files from the
+app's own directory, not the repo root) — at minimum `apps/web/.env.local`
+with `AUTH_SECRET=<generate one>`, or every dashboard request fails with a
+"server configuration" error. `npx auth secret` (run from `apps/web/`)
+generates and writes one for you.
+
 | Variable                                  | Required when                                                                        |
 | ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| `AUTH_SECRET`                             | always, for `apps/web` — signs/encrypts session JWTs; the dashboard refuses every auth request without it, in every mode |
+| `AUTH_TRUST_HOST`                         | `next start` (production mode) only — set to `true`, or Auth.js rejects every request as an untrusted host |
+| `DEMO_USER_PASSWORD`                      | optional — overrides the shared password for the two seeded demo dashboard logins (default: `recoverai-demo`) |
 | `DATABASE_URL`                            | `NODE_ENV=production`; optional otherwise — defaults to a local SQLite file (`packages/database/prisma/dev.db`) if unset |
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | `PAYMENT_PROVIDER=razorpay`                                                          |
 | `AI_API_KEY` / `AI_MODEL`                 | `NODE_ENV=production`; optional otherwise — unset means the Diagnosis/Strategy agents run their deterministic fallback |
@@ -802,11 +812,30 @@ problem — it does not fail silently or fall back to defaults in production.
   every view, deliberately, so that loading a page (a GET request) never
   creates a permanent audit-log/recovery-action entry. Only the CLI's
   explicit `recover`/`pipeline run`/`agent` commands write those.
-- **No authentication or multi-tenant isolation on the dashboard.** There
-  is no login and no per-merchant access control — anyone who can reach
-  `apps/web` can see every ingested transaction and diagnosis. Fine for a
-  local demo, not for anything resembling production — see
-  [`docs/security-model.md`](./docs/security-model.md#known-limitations).
+- **Authentication and per-merchant data isolation** — closes the gap
+  previously documented here. Every dashboard route sits behind a real
+  login (`apps/web/auth.ts`, `middleware.ts`, Auth.js v5 with a
+  Credentials provider over `@recoverai/database`'s new `UserRepository`;
+  passwords are bcrypt-hashed, sessions are signed JWTs) — an
+  unauthenticated request to any route other than `/login` is redirected
+  there, with a `callbackUrl` back to the page it tried to reach. Every
+  login is scoped to exactly one `merchantId`, carried through the
+  session, and every server-side data loader
+  (`apps/web/lib/{transactions,pipeline,analysis,audit,diagnosis}.ts`)
+  filters through `TransactionRepository.findByMerchant`/
+  `AuditEventRepository.findByMerchant` using it — not a client-side
+  filter over an unscoped fetch. The bundled sample dataset spans two
+  merchants (`mer_aurora_retail`, `mer_northwind_saas`), so this is
+  directly demonstrable: signing in as either of the two seeded demo
+  accounts (`aurora@recoverai.dev` / `northwind@recoverai.dev`, see
+  `apps/web/lib/auth-seed.ts` and [§10](#10-environment-variables)) shows
+  only that merchant's transactions, and opening the other merchant's
+  transaction id directly (e.g. via its diagnosis drill-down URL) 404s
+  rather than leaking it — verified by hand against both a `next dev` and
+  a production `next build && next start` run. `/demo`'s curated
+  scenarios remain deliberately unscoped (they run against an isolated
+  in-memory store, not real merchant data — see the `/demo` note above);
+  every other route is both authenticated and merchant-scoped now.
 
 ## 12. Planned implementation phases
 

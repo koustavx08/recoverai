@@ -241,17 +241,32 @@ This review assumes:
 - The only input this system treats as genuinely adversarial is the AI
   provider's response — because a model's output is inherently
   unpredictable even when the provider itself is trusted infrastructure.
-- There is no authentication/authorization layer anywhere in this
-  codebase (no login, no per-merchant access control on the dashboard).
-  That is explicitly out of scope for this phase — see "Known
-  limitations" below — and this review does not claim otherwise.
+- The web dashboard (`apps/web`) now has a real authentication and
+  per-merchant authorization layer (Auth.js v5, `middleware.ts`,
+  `@recoverai/database`'s `UserRepository`) — every route requires a
+  signed-in session, and every session is scoped to exactly one
+  `merchantId`; see "Known limitations" below for what this does and
+  does not cover. The CLI has no authentication layer at all — it
+  assumes the person invoking it is the merchant/operator, matching the
+  threat assumption above.
 
 ## Known limitations
 
-- **No authentication or multi-tenant isolation.** The web dashboard has
-  no login and no access control; anyone who can reach it can see every
-  ingested transaction and every diagnosis. Fine for a local hackathon
-  demo, not fine for anything resembling production.
+- **Authentication and per-merchant isolation exist now, but the account
+  model is a demo convenience, not production-grade.** `apps/web` gates
+  every route behind a login and scopes every data loader to the
+  signed-in session's `merchantId` (`TransactionRepository`/
+  `AuditEventRepository.findByMerchant`) — see [§11 of the
+  README](../README.md#11-current-project-status). What's still missing:
+  there is no self-serve account creation, invite, or password-reset
+  flow (accounts are seeded idempotently by `apps/web/lib/auth-seed.ts`
+  with a shared demo password from `DEMO_USER_PASSWORD`); no rate
+  limiting or lockout on repeated failed logins; no audit trail of
+  sign-in/sign-out events; and no role distinction — every user for a
+  merchant has identical access to that merchant's data. None of this
+  blocks the core property (one merchant's data is inaccessible to
+  another's signed-in user), but a real multi-user deployment needs a
+  real account-provisioning system in place of `auth-seed.ts`.
 - **No persistent audit store.** Every `AuditEvent` shown anywhere
   (CLI, `/audit-log`) is computed fresh per process/request from an
   in-memory store — there is no tamper-evidence, no retention, and

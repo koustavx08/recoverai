@@ -21,7 +21,7 @@ import {
 import { loadConfig } from "@recoverai/config";
 import { AnthropicProvider, RecoveryExecutionSimulator, type AIModelProvider } from "@recoverai/integrations";
 import type { Database } from "@recoverai/database";
-import type { FailureReasonCode, PaymentAttempt, Transaction } from "@recoverai/core";
+import type { FailureReasonCode, MerchantId, PaymentAttempt, Transaction } from "@recoverai/core";
 
 /**
  * Resolves a path under the repo's `data/` directory relative to this
@@ -161,12 +161,22 @@ export const PERSISTED_SOURCE_LABEL =
  * anything separately ingested via `recoverai ingest`, not just this one
  * file. This is what lets the dashboard show real, accumulated data instead
  * of re-deriving the same static file fresh on every request.
+ *
+ * Pass `merchantId` (every dashboard view does, using the signed-in
+ * session's merchant — see `auth.ts`) to scope the read to one merchant's
+ * transactions via `TransactionRepository.findByMerchant`, closing the
+ * "no per-merchant isolation" gap: the bundled sample dataset spans two
+ * merchants (`mer_aurora_retail`, `mer_northwind_saas`), so without this
+ * every view would mix both. Omit it only for callers that are
+ * deliberately cross-merchant (there are none left in `apps/web` — this
+ * default exists for `@recoverai/analysis`-style batch tooling elsewhere).
  */
 export async function loadPersistedTransactions(
   db: Database,
   filePath: string,
+  merchantId?: MerchantId,
 ): Promise<readonly NormalizedTransaction[]> {
   await ingestFile({ filePath, repository: db.transactions });
-  const rows = await db.transactions.findAll();
+  const rows = merchantId ? await db.transactions.findByMerchant(merchantId) : await db.transactions.findAll();
   return rows.map((transaction) => toNormalizedTransaction(transaction, "database"));
 }

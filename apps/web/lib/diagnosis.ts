@@ -31,6 +31,7 @@ import {
 import type {
   FailureReason,
   Logger,
+  MerchantId,
   Money,
   RecoveryStrategyType,
   RevenueRisk,
@@ -87,15 +88,19 @@ function hasSucceededWithAlternateMethod(
  * diagnosis|strategy` commands use, against every transaction persisted to
  * the durable store (the bundled sample dataset, seeded on every call,
  * plus anything separately ingested via `recoverai ingest`), for one
- * transaction id. Returns `null` when the transaction isn't found — the
- * page renders a 404 in that case, nothing is fabricated.
+ * transaction id. Returns `null` when the transaction isn't found *for
+ * this merchant* — the page renders a 404 in that case, nothing is
+ * fabricated. Scoping the lookup to `merchantId` (not just filtering the
+ * result afterward) means a signed-in user can never drill into another
+ * merchant's transaction by guessing its id.
  */
 export async function loadTransactionDiagnosis(
+  merchantId: MerchantId,
   transactionId: string,
 ): Promise<TransactionDiagnosisView | null> {
   try {
     const db = createPrismaDatabase();
-    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH);
+    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH, merchantId);
 
     const transaction = transactions.find((t) => t.id === transactionId);
     if (!transaction) return null;

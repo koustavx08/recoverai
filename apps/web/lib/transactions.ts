@@ -1,6 +1,6 @@
 import type { NormalizedTransaction } from "@recoverai/analysis";
 import { createPrismaDatabase } from "@recoverai/database";
-import type { TransactionStatus } from "@recoverai/core";
+import type { MerchantId, TransactionStatus } from "@recoverai/core";
 import { loadPersistedTransactions, repoDataPath } from "./pipeline-runtime";
 
 const SAMPLE_DATA_PATH = repoDataPath("samples", "transactions.json");
@@ -34,11 +34,12 @@ const EMPTY_STATUS_COUNTS: Record<TransactionStatus, number> = {
  * generated or estimated.
  */
 export async function loadTransactionList(
+  merchantId: MerchantId,
   statusFilter?: TransactionStatus,
 ): Promise<TransactionListView | null> {
   try {
     const db = createPrismaDatabase();
-    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH);
+    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH, merchantId);
     if (transactions.length === 0) return null;
 
     const statusCounts = { ...EMPTY_STATUS_COUNTS };

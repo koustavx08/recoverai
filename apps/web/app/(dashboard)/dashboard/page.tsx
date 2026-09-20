@@ -16,9 +16,11 @@ import {
 import { loadDashboardAnalysis } from "@/lib/analysis";
 import { formatCount, formatMoney } from "@/lib/format";
 import { FAILURE_LABELS, PRIORITY_BADGE_VARIANT } from "@/lib/labels";
+import { requireMerchantId } from "@/lib/session";
 
 export default async function DashboardPage() {
-  const analysis = await loadDashboardAnalysis();
+  const merchantId = await requireMerchantId();
+  const analysis = await loadDashboardAnalysis(merchantId);
 
   return (
     <>

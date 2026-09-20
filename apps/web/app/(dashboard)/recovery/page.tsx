@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadPortfolioPipeline } from "@/lib/pipeline";
 import { formatCount, formatMoney } from "@/lib/format";
+import { requireMerchantId } from "@/lib/session";
 
 export default async function RecoveryActivityPage() {
-  const view = await loadPortfolioPipeline();
+  const merchantId = await requireMerchantId();
+  const view = await loadPortfolioPipeline(merchantId);
 
   return (
     <>

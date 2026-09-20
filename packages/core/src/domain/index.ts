@@ -5,3 +5,4 @@ export * from "./revenue-risk.js";
 export * from "./recovery.js";
 export * from "./agent-decision.js";
 export * from "./audit-event.js";
+export * from "./user.js";

@@ -1,6 +1,7 @@
 import type { AnalysisResult } from "@recoverai/analysis";
 import { analyzeTransactions } from "@recoverai/analysis";
 import { createPrismaDatabase } from "@recoverai/database";
+import type { MerchantId } from "@recoverai/core";
 import { loadPersistedTransactions, repoDataPath } from "./pipeline-runtime";
 
 /**
@@ -12,10 +13,10 @@ import { loadPersistedTransactions, repoDataPath } from "./pipeline-runtime";
  */
 const SAMPLE_DATA_PATH = repoDataPath("samples", "transactions.json");
 
-export async function loadDashboardAnalysis(): Promise<AnalysisResult | null> {
+export async function loadDashboardAnalysis(merchantId: MerchantId): Promise<AnalysisResult | null> {
   try {
     const db = createPrismaDatabase();
-    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH);
+    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH, merchantId);
     if (transactions.length === 0) return null;
     return analyzeTransactions(transactions);
   } catch {

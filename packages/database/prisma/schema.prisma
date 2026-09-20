@@ -9,10 +9,15 @@
 //
 // There are deliberately no foreign-key relations between tables: nothing
 // in this codebase persists Merchant/Customer records today (only
-// Transaction, RevenueRisk, RecoveryAction, and AuditEvent are actually
-// written), so FK constraints on merchantId/customerId would fail in
-// normal use. This mirrors the in-memory implementation, which also
+// Transaction, RevenueRisk, RecoveryAction, AuditEvent, and User are
+// actually written), so FK constraints on merchantId/customerId would fail
+// in normal use. This mirrors the in-memory implementation, which also
 // enforces no referential integrity between repositories.
+//
+// `User` backs dashboard login (apps/web) — see docs/security-model.md.
+// `merchantId` is a plain string, not a Merchant FK, for the same reason
+// as every other merchantId column here; a dashboard login is scoped to
+// exactly one merchant via this field (see UserRepository).
 
 generator client {
   provider = "prisma-client-js"
@@ -108,6 +113,16 @@ model RecoveryAction {
   metadata      String?
 
   @@index([transactionId])
+}
+
+model User {
+  id           String @id
+  email        String @unique
+  passwordHash String
+  merchantId   String
+  createdAt    String
+
+  @@index([merchantId])
 }
 
 model AuditEvent {

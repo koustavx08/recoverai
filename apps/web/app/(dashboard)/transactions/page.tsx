@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { isDrillDownEligible, loadTransactionList } from "@/lib/transactions";
 import { formatDateTime, formatMoney } from "@/lib/format";
 import { STATUS_BADGE_VARIANT, STATUS_LABELS } from "@/lib/labels";
+import { requireMerchantId } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import type { TransactionStatus } from "@recoverai/core";
 
@@ -30,7 +31,8 @@ interface TransactionsPageProps {
 export default async function TransactionsPage({ searchParams }: TransactionsPageProps) {
   const { status } = await searchParams;
   const statusFilter = isTransactionStatus(status) ? status : undefined;
-  const view = await loadTransactionList(statusFilter);
+  const merchantId = await requireMerchantId();
+  const view = await loadTransactionList(merchantId, statusFilter);
 
   return (
     <>

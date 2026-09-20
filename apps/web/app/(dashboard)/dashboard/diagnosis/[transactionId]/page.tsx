@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { loadTransactionDiagnosis, type TransactionDiagnosisView } from "@/lib/diagnosis";
 import { formatMoney } from "@/lib/format";
 import { FAILURE_LABELS } from "@/lib/labels";
+import { requireMerchantId } from "@/lib/session";
 import type { RecoveryOutcome } from "@recoverai/core";
 
 const EXECUTION_OUTCOME_TO_STAGE_STATUS: Readonly<Record<RecoveryOutcome, StageStatus>> = {
@@ -48,7 +49,8 @@ interface DiagnosisPageProps {
 
 export default async function DiagnosisPage({ params }: DiagnosisPageProps) {
   const { transactionId } = await params;
-  const view = await loadTransactionDiagnosis(transactionId);
+  const merchantId = await requireMerchantId();
+  const view = await loadTransactionDiagnosis(merchantId, transactionId);
   if (!view) notFound();
 
   const {

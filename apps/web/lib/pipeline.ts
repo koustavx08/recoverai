@@ -1,6 +1,6 @@
 import { BatchRecoveryPipeline, RecoveryPipeline, type BatchPipelineResult } from "@recoverai/agents";
 import { createPrismaDatabase } from "@recoverai/database";
-import type { Logger } from "@recoverai/core";
+import type { Logger, MerchantId } from "@recoverai/core";
 import {
   buildFactsList,
   buildPipelineAgents,
@@ -33,10 +33,10 @@ export interface PortfolioPipelineView {
  * only if ingestion itself fails; an empty dataset is still a valid (if
  * empty) result.
  */
-export async function loadPortfolioPipeline(): Promise<PortfolioPipelineView | null> {
+export async function loadPortfolioPipeline(merchantId: MerchantId): Promise<PortfolioPipelineView | null> {
   try {
     const db = createPrismaDatabase();
-    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH);
+    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH, merchantId);
     if (transactions.length === 0) return null;
 
     const provider = resolveProvider();

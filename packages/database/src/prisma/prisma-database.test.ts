@@ -22,9 +22,11 @@ describe("createPrismaDatabase", () => {
   const customerId = brand<string, "CustomerId">("prisma_test_cus_1");
   const recoveryActionId = brand<string, "RecoveryActionId">("prisma_test_action_1");
   const auditEventId = brand<string, "AuditEventId">("prisma_test_audit_1");
+  const userId = brand<string, "UserId">("prisma_test_user_1");
 
   afterAll(async () => {
     const client = getPrismaClient();
+    await client.user.deleteMany({ where: { id: userId } });
     await client.auditEvent.deleteMany({ where: { id: auditEventId } });
     await client.recoveryAction.deleteMany({ where: { id: recoveryActionId } });
     await client.revenueRisk.deleteMany({ where: { transactionId } });
@@ -198,6 +200,25 @@ describe("createPrismaDatabase", () => {
     const found = await db.auditEvents.findByMerchant(merchantId);
     expect(found.some((e) => e.id === auditEventId)).toBe(true);
     expect(typeof (db.auditEvents as { update?: unknown }).update).toBe("undefined");
+  });
+
+  it("round-trips a user, findable by id or by email, never by a stale email", async () => {
+    await db.users.save({
+      id: userId,
+      email: "prisma_test_user@example.com",
+      passwordHash: "$2b$10$abcdefghijklmnopqrstuv",
+      merchantId,
+      createdAt: iso("2026-01-01T00:00:00.000Z"),
+    });
+
+    const byId = await db.users.findById(userId);
+    expect(byId?.email).toBe("prisma_test_user@example.com");
+    expect(byId?.merchantId).toBe(merchantId);
+
+    const byEmail = await db.users.findByEmail("prisma_test_user@example.com");
+    expect(byEmail?.id).toBe(userId);
+
+    expect(await db.users.findByEmail("nobody@example.com")).toBeNull();
   });
 
   it("persists across independently created Database handles (same process)", async () => {

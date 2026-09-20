@@ -13,6 +13,7 @@ export type MerchantId = Brand<string, "MerchantId">;
 export type RecoveryActionId = Brand<string, "RecoveryActionId">;
 export type AgentDecisionId = Brand<string, "AgentDecisionId">;
 export type AuditEventId = Brand<string, "AuditEventId">;
+export type UserId = Brand<string, "UserId">;
 
 /** ISO-8601 timestamp string, e.g. "2026-08-26T10:15:00.000Z". */
 export type ISODateString = Brand<string, "ISODateString">;

@@ -1,7 +1,7 @@
 import type { NormalizedTransaction } from "@recoverai/analysis";
 import { BatchRecoveryPipeline, RecoveryPipeline, type PipelineResult } from "@recoverai/agents";
 import { createPrismaDatabase } from "@recoverai/database";
-import { brand, type AuditEvent, type Logger } from "@recoverai/core";
+import { brand, type AuditEvent, type Logger, type MerchantId } from "@recoverai/core";
 import {
   buildFactsList,
   buildPipelineAgents,
@@ -143,10 +143,10 @@ export interface AuditTrailView {
  * load is not recorded as a permanent audit event, which would make every
  * refresh a new "real" entry.
  */
-export async function loadAuditTrail(): Promise<AuditTrailView | null> {
+export async function loadAuditTrail(merchantId: MerchantId): Promise<AuditTrailView | null> {
   try {
     const db = createPrismaDatabase();
-    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH);
+    const transactions = await loadPersistedTransactions(db, SAMPLE_DATA_PATH, merchantId);
     if (transactions.length === 0) return null;
 
     const provider = resolveProvider();
