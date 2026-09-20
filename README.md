@@ -559,11 +559,21 @@ problem — it does not fail silently or fall back to defaults in production.
   the exact rules.
 - `@recoverai/integrations`: `PaymentProvider` / `RecoveryActionProvider`
   abstractions, a deterministic simulator implementation (no credentials
-  required), an unimplemented Razorpay stub, and **`AIModelProvider`** — a
-  vendor-agnostic `generateStructured<T>()` contract with one real
-  implementation, `AnthropicProvider` (forces tool-based structured output,
-  validates it against the caller's own Zod schema before returning; no
-  free-form prose parsing).
+  required), a **real Razorpay implementation of both** (`RazorpayPaymentProvider`
+  / `RazorpayRecoveryActionProvider`, `packages/integrations/src/razorpay/`
+  — real REST calls against Razorpay's Orders/Payments/Payment Links API
+  via a small hand-typed `RazorpayClient`, not the SDK's largely `any`-typed
+  client), and **`AIModelProvider`** — a vendor-agnostic
+  `generateStructured<T>()` contract with one real implementation,
+  `AnthropicProvider` (forces tool-based structured output, validates it
+  against the caller's own Zod schema before returning; no free-form prose
+  parsing). Neither Razorpay class is wired into `RecoveryPipeline` or
+  `recoverai recover`/`pipeline run` — those still always use the
+  simulator (see [§8](#8-agent-architecture)'s simulation-only boundary)
+  — and Razorpay requires real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` to
+  do anything at all; nothing in this repo has been run against a live
+  Razorpay account (see roadmap item 9 in [§12](#12-planned-implementation-phases)
+  for the full picture of what's real vs. still missing).
 - `@recoverai/agents`: interfaces for all six pipeline stages, **all six
   now with real implementations**, plus `RecoveryPipeline` — a real
   orchestrator that wires them together end to end — and
@@ -733,9 +743,14 @@ problem — it does not fail silently or fall back to defaults in production.
   this repository is a **SIMULATION** — `RecoveryExecutionResult.
   simulationMode` is always `true`; there is no code path, in the CLI, the
   dashboard, or any agent, that can mark one `false`.
-- **No live Razorpay execution.** `RazorpayPaymentProvider` and
-  `RazorpayRecoveryActionProvider` throw until implemented; the recovery
-  simulator never contacts Razorpay, a bank, a UPI provider, or a customer.
+- **No live Razorpay execution in the pipeline.** `RazorpayPaymentProvider`
+  and `RazorpayRecoveryActionProvider` are real, working REST clients now
+  (see [§11](#11-current-project-status) above), but `RecoveryPipeline`,
+  `recoverai recover`, and `recoverai pipeline run` are hardwired to the
+  simulator — nothing selects Razorpay at runtime, so a real credential
+  being present changes nothing about what those commands do. The
+  recovery simulator itself never contacts Razorpay, a bank, a UPI
+  provider, or a customer.
 - **No real money movement, anywhere.** Nothing in the CLI, JSON output,
   or dashboard claims a "₹X recovered" outside of an explicit `SIMULATED`
   label. Every recoverable/recovered amount shown is either a deterministic
@@ -825,14 +840,28 @@ problem — it does not fail silently or fall back to defaults in production.
    `/demo` is unaffected by design: its curated scenarios (and their
    `demo_history_support` fixture transactions) run against an isolated
    in-memory store so they never leak into the real one.
-9. **Real Razorpay integration** — implement `RazorpayPaymentProvider` /
-   `RazorpayRecoveryActionProvider` behind the existing interfaces, with no
-   changes required to the domain layer or agents — the same interface
-   boundary that lets `RecoveryExecutionSimulator` stand in today.
-10. **Metrics & evaluation at the real-recovery layer** — once §7–9 exist,
-    measure real recovery-agent performance against ground truth, extending
-    (not replacing) the simulation-based evaluation harnesses already in
-    place for diagnosis, strategy, and simulated recovery.
+9. ~~**Real Razorpay integration**~~ — ✅ done at the provider layer:
+   `RazorpayPaymentProvider`/`RazorpayRecoveryActionProvider`
+   (`packages/integrations/src/razorpay/`) make real REST calls against
+   Razorpay's Orders/Payments/Payment Links API — no changes were needed
+   to the domain layer or agents, exactly the interface boundary that
+   already let `RecoveryExecutionSimulator` stand in. `charge()` creates
+   a real Order and always reports `succeeded: false` (Razorpay has no
+   server-initiated charge without a saved payment token this codebase
+   never stores); `getChargeStatus()`/payment-link `verify()` report
+   whatever Razorpay's API actually says. **Not done:** wiring either
+   class into `RecoveryPipeline`/`recoverai recover`/`pipeline run` —
+   those remain hardwired to the simulator, so this is real, tested,
+   unreachable-by-default infrastructure, not a live path. Untested
+   against an actual Razorpay account (no credentials available); tests
+   mock `fetch` rather than hitting the network. See
+   [`RazorpayCredentials`](./packages/integrations/src/razorpay/razorpay-config.ts)
+   /`RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`.
+10. **Metrics & evaluation at the real-recovery layer** — once §7 and
+    real-provider *pipeline wiring* exist, measure real recovery-agent
+    performance against ground truth, extending (not replacing) the
+    simulation-based evaluation harnesses already in place for diagnosis,
+    strategy, and simulated recovery.
 
 ## License
 
