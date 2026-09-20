@@ -11,12 +11,12 @@ import type { RazorpayPaymentLink } from "./razorpay-types.js";
  *
  * `auto_retry` needs a saved payment method (not part of this data
  * model — see README §11), `notification_email/sms/whatsapp` need a
- * separate messaging provider (a real sender, not a payment gateway
- * concern), and `escalate_to_agent`/`none` involve no external API call
- * at all. This provider throws for all of those rather than silently
- * doing nothing or pretending to have attempted something it can't —
- * matching the rest of this codebase's rule of never fabricating an
- * outcome.
+ * separate messaging provider (see `../notifications/` — a real sender,
+ * not a payment gateway concern), and `escalate_to_agent`/`none` involve
+ * no external API call at all. This provider throws for all of those
+ * rather than silently doing nothing or pretending to have attempted
+ * something it can't — matching the rest of this codebase's rule of
+ * never fabricating an outcome.
  */
 export class RazorpayRecoveryActionProvider implements RecoveryActionProvider {
   readonly name = "razorpay";

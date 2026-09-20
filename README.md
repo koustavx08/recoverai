@@ -559,21 +559,35 @@ problem — it does not fail silently or fall back to defaults in production.
   the exact rules.
 - `@recoverai/integrations`: `PaymentProvider` / `RecoveryActionProvider`
   abstractions, a deterministic simulator implementation (no credentials
-  required), a **real Razorpay implementation of both** (`RazorpayPaymentProvider`
-  / `RazorpayRecoveryActionProvider`, `packages/integrations/src/razorpay/`
-  — real REST calls against Razorpay's Orders/Payments/Payment Links API
-  via a small hand-typed `RazorpayClient`, not the SDK's largely `any`-typed
-  client), and **`AIModelProvider`** — a vendor-agnostic
-  `generateStructured<T>()` contract with one real implementation,
-  `AnthropicProvider` (forces tool-based structured output, validates it
-  against the caller's own Zod schema before returning; no free-form prose
-  parsing). Neither Razorpay class is wired into `RecoveryPipeline` or
-  `recoverai recover`/`pipeline run` — those still always use the
-  simulator (see [§8](#8-agent-architecture)'s simulation-only boundary)
-  — and Razorpay requires real `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` to
-  do anything at all; nothing in this repo has been run against a live
-  Razorpay account (see roadmap item 9 in [§12](#12-planned-implementation-phases)
-  for the full picture of what's real vs. still missing).
+  required), and **four real, credential-gated implementations** of them —
+  none wired into `RecoveryPipeline` or `recoverai recover`/`pipeline run`,
+  which always use the simulator (see [§8](#8-agent-architecture)'s
+  simulation-only boundary). Each throws for anything outside its actual
+  vendor capability rather than silently no-op'ing:
+  - `RazorpayPaymentProvider` / `RazorpayRecoveryActionProvider`
+    (`packages/integrations/src/razorpay/`) — real REST calls against
+    Razorpay's Orders/Payments/Payment Links API via a small hand-typed
+    `RazorpayClient`, not the SDK's largely `any`-typed client.
+  - `SmtpEmailProvider` (`packages/integrations/src/notifications/`) —
+    real email via `nodemailer`; `succeeded` reflects the SMTP server's
+    actual accept/reject, not a guess. `verify()` throws — raw SMTP has
+    no post-send delivery/open-tracking signal to report.
+  - `TwilioMessagingProvider` (same directory) — real SMS/WhatsApp via a
+    hand-typed `TwilioClient` (Twilio's Messages REST API); `verify()`
+    reports Twilio's own delivered/read status, a real signal SMTP
+    doesn't have.
+  - **`AIModelProvider`** — a vendor-agnostic `generateStructured<T>()`
+    contract with one real implementation, `AnthropicProvider` (forces
+    tool-based structured output, validates it against the caller's own
+    Zod schema before returning; no free-form prose parsing).
+
+  Every provider above requires real credentials
+  (`RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET`, SMTP/Twilio credentials passed
+  to its constructor) to do anything at all, and none has been run against
+  a live account — see roadmap items 7 and 9 in
+  [§12](#12-planned-implementation-phases) for the full picture of what's
+  real vs. still missing (there is still no live-execution path or
+  human-approval mechanism anywhere in this repo).
 - `@recoverai/agents`: interfaces for all six pipeline stages, **all six
   now with real implementations**, plus `RecoveryPipeline` — a real
   orchestrator that wires them together end to end — and
@@ -820,12 +834,25 @@ problem — it does not fail silently or fall back to defaults in production.
    across CLI invocations — see `pnpm db:generate`/`pnpm db:migrate` in
    [§9](#9-local-development-setup). Swapping to Postgres later only needs a new
    `datasource` provider/`DATABASE_URL`, not a caller change.
-7. **Real recovery execution** — implement a live `RecoveryActionProvider`
-   (e.g. real email/SMS/WhatsApp senders, a real payment-link generator)
-   behind the same `RecoveryAgent` interface the simulator already
-   implements, gated by an actual human-approval mechanism for every
-   strategy that `requiresHumanApproval` — turning today's `pending`
-   outcome into a real, audited action for the first time.
+7. **Real recovery execution** — *partially done, deliberately paused
+   there.* The real senders now exist: `SmtpEmailProvider` (real email via
+   `nodemailer`) and `TwilioMessagingProvider` (real SMS/WhatsApp via
+   Twilio's REST API), both `RecoveryActionProvider` implementations in
+   `packages/integrations/src/notifications/`, alongside Razorpay's
+   `payment_link` action from roadmap item 9. Each is scoped to exactly
+   what its vendor can do without data this codebase doesn't have — a
+   saved payment token, a customer's real email/phone (`execute()`
+   requires the caller to supply one via `action.metadata`; nothing
+   invents one) — and each throws for action types it can't fulfill
+   rather than silently no-op'ing. **Not done, on purpose:** none of these
+   are wired into `RecoveryAgent`/`RecoveryPipeline`, `SimulatedRecoveryAgent`
+   still hardcodes `RecoveryExecutionSimulator`, and there is still no
+   human-approval mechanism — every strategy that `requiresHumanApproval`
+   still resolves to `pending`, never a real action. Turning today's
+   `pending` into a real, audited action means designing an approval
+   workflow and consciously widening the `simulationMode: true`
+   type/policy/schema gates described in [§8](#8-agent-architecture) —
+   a deliberate, security-relevant decision this repo has not made yet.
 8. ~~**Full dashboard data wiring**~~ — ✅ done: `apps/web/lib/*` reads
    transactions from the same `createPrismaDatabase()` store the CLI
    writes to (via the shared `loadPersistedTransactions()` helper in
