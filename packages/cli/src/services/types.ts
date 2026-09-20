@@ -1,9 +1,11 @@
 import type { IngestionSummary, AnalysisResult } from "@recoverai/analysis";
 import type {
   BatchPipelineResult,
+  DetectionResult,
   Diagnosis,
   DiagnosisExecutionMeta,
   PipelineResult,
+  PrioritizationResult,
   RecoveryExecutionMeta,
   RecoveryExecutionResult,
   RecoveryVerificationResult,
@@ -69,6 +71,44 @@ export interface StrategizedResult {
   readonly json: boolean;
 }
 
+export interface DetectedResult {
+  readonly status: "detected";
+  readonly command: "agent";
+  readonly transactionId: string;
+  readonly result: DetectionResult;
+  readonly latencyMs: number;
+  readonly json: boolean;
+}
+
+export interface PrioritizedResult {
+  readonly status: "prioritized";
+  readonly command: "agent";
+  readonly transactionId: string;
+  readonly result: PrioritizationResult;
+  readonly latencyMs: number;
+  readonly json: boolean;
+}
+
+export interface RecoveryExecutedResult {
+  readonly status: "recovery_executed";
+  readonly command: "agent";
+  readonly transactionId: string;
+  readonly diagnosis: Diagnosis;
+  readonly decision: StrategyDecision;
+  readonly execution: RecoveryExecutionResult;
+  readonly executionMeta: RecoveryExecutionMeta;
+  readonly json: boolean;
+}
+
+export interface AgentVerifiedResult {
+  readonly status: "agent_verified";
+  readonly command: "agent";
+  readonly transactionId: string;
+  readonly execution: RecoveryExecutionResult;
+  readonly verification: RecoveryVerificationResult;
+  readonly json: boolean;
+}
+
 export interface RecoveredResult {
   readonly status: "recovered";
   readonly command: "recover";
@@ -128,8 +168,12 @@ export type CommandResult =
   | ErrorResult
   | IngestedResult
   | AnalyzedResult
+  | DetectedResult
+  | PrioritizedResult
   | DiagnosedResult
   | StrategizedResult
+  | RecoveryExecutedResult
+  | AgentVerifiedResult
   | RecoveredResult
   | PipelineSingleResult
   | PipelineBatchResult

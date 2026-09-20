@@ -3,10 +3,14 @@ import type { AnalysisResult, IngestionSummary } from "@recoverai/analysis";
 import type { BatchPipelineResult } from "@recoverai/agents";
 import type { FailureReasonCode, TransactionStatus } from "@recoverai/core";
 import type {
+  AgentVerifiedResult,
+  DetectedResult,
   DiagnosedResult,
   PipelineBatchResult,
   PipelineSingleResult,
+  PrioritizedResult,
   RecoveredResult,
+  RecoveryExecutedResult,
   ReportedResult,
   SimulatedResult,
   StrategizedResult,
@@ -368,6 +372,132 @@ export function printRecoveryJson(result: RecoveredResult): void {
         verification: result.verification,
         simulated: true,
       },
+      null,
+      2,
+    ),
+  );
+}
+
+export function printDetection(result: DetectedResult): void {
+  const { result: detection } = result;
+  const out: string[] = [];
+
+  out.push("RecoverAI Detection Agent");
+  out.push("");
+  out.push(line("Transaction:", result.transactionId, 22));
+  out.push(line("Detected:", detection.detected ? "yes" : "no", 22));
+  out.push(line("Actionable:", detection.actionable ? "yes" : "no", 22));
+  out.push(line("Severity:", detection.severity, 22));
+  out.push("");
+  out.push("Why:");
+  out.push(`  ${detection.reason}`);
+
+  console.info(out.join("\n"));
+}
+
+export function printDetectionJson(result: DetectedResult): void {
+  console.info(
+    JSON.stringify(
+      { transactionId: result.transactionId, result: result.result, latencyMs: result.latencyMs },
+      null,
+      2,
+    ),
+  );
+}
+
+export function printPrioritization(result: PrioritizedResult): void {
+  const { result: prioritization } = result;
+  const out: string[] = [];
+
+  out.push("RecoverAI Prioritization Agent");
+  out.push("");
+  out.push(line("Transaction:", result.transactionId, 22));
+  out.push(line("Priority:", prioritization.priority, 22));
+  out.push(line("Score:", `${prioritization.score}/100`, 22));
+  out.push("");
+  out.push("Factors:");
+  for (const factor of prioritization.factors) out.push(`  - ${factor}`);
+  out.push("");
+  out.push("Why:");
+  out.push(`  ${prioritization.explanation}`);
+
+  console.info(out.join("\n"));
+}
+
+export function printPrioritizationJson(result: PrioritizedResult): void {
+  console.info(
+    JSON.stringify(
+      { transactionId: result.transactionId, result: result.result, latencyMs: result.latencyMs },
+      null,
+      2,
+    ),
+  );
+}
+
+export function printRecoveryExecuted(result: RecoveryExecutedResult): void {
+  const { execution, decision } = result;
+  const out: string[] = [];
+
+  out.push("RecoverAI Recovery Execution Agent");
+  out.push("");
+  out.push("Mode:");
+  out.push("  SIMULATION — no real payment provider connected.");
+  out.push("");
+  out.push(line("Transaction:", result.transactionId, 22));
+  out.push(line("Strategy:", decision.strategy, 22));
+  out.push(line("Action:", execution.action, 22));
+  out.push(line("Outcome:", OUTCOME_LABELS[execution.outcome] ?? execution.outcome, 22));
+  if (execution.blockedReason) out.push(line("Blocked reason:", execution.blockedReason, 22));
+  out.push("");
+  out.push("SIMULATED RECOVERY:");
+  out.push(`  ${formatMoney(execution.recoveredAmount)}`);
+  out.push("");
+  out.push(`Audit: executionId=${execution.executionId}`);
+
+  console.info(out.join("\n"));
+}
+
+export function printRecoveryExecutedJson(result: RecoveryExecutedResult): void {
+  console.info(
+    JSON.stringify(
+      {
+        transactionId: result.transactionId,
+        diagnosis: result.diagnosis,
+        decision: result.decision,
+        execution: result.execution,
+        executionMeta: result.executionMeta,
+        simulated: true,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+export function printAgentVerified(result: AgentVerifiedResult): void {
+  const { execution, verification } = result;
+  const out: string[] = [];
+
+  out.push("RecoverAI Verification Agent");
+  out.push("");
+  out.push(line("Transaction:", result.transactionId, 22));
+  out.push(line("Execution outcome:", OUTCOME_LABELS[execution.outcome] ?? execution.outcome, 22));
+  out.push(line("Verified:", verification.verified ? "yes" : "no", 22));
+  if (verification.reasons.length > 0) {
+    out.push("");
+    out.push("Reasons:");
+    for (const reason of verification.reasons) out.push(`  - ${reason}`);
+  }
+  out.push("");
+  out.push(`Audit: executionId=${verification.executionId}`);
+
+  console.info(out.join("\n"));
+}
+
+export function printAgentVerifiedJson(result: AgentVerifiedResult): void {
+  console.info(
+    JSON.stringify(
+      { transactionId: result.transactionId, execution: result.execution, verification: result.verification },
       null,
       2,
     ),

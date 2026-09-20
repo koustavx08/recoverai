@@ -176,7 +176,7 @@ recoverai analyze    # run the deterministic risk-analysis pipeline    [implemen
 recoverai simulate   # exercise the pipeline via the payment simulator [implemented]
 recoverai recover    # run a SIMULATED recovery execution               [implemented — simulation only]
 recoverai report     # generate a merchant-facing recovery report      [implemented — simulation only]
-recoverai agent      # run/inspect a single agent pipeline stage       [diagnosis, strategy implemented]
+recoverai agent      # run/inspect a single agent pipeline stage       [implemented — all six stages]
 recoverai pipeline   # run the full 6-stage pipeline (single or batch)  [implemented — simulation only]
 ```
 
@@ -193,8 +193,12 @@ recoverai ingest --file data/samples/transactions.csv
 recoverai analyze                                  # defaults to the bundled sample dataset
 recoverai analyze --file data/generated/transactions.json --json
 
-recoverai agent --stage diagnosis --transaction txn_00002
-recoverai agent --stage strategy  --transaction txn_00002 --json
+recoverai agent --stage detection         --transaction txn_00002
+recoverai agent --stage prioritization    --transaction txn_00002
+recoverai agent --stage diagnosis         --transaction txn_00002
+recoverai agent --stage strategy          --transaction txn_00002 --json
+recoverai agent --stage recovery_execution --transaction txn_00002  # SIMULATED
+recoverai agent --stage verification      --transaction txn_00002
 
 recoverai recover --transaction txn_00002           # SIMULATED recovery execution — never live
 recoverai recover --transaction txn_00002 --seed abc --json
@@ -629,28 +633,35 @@ problem — it does not fail silently or fall back to defaults in production.
   `config.ai.isConfigured` is true only once both a key and model are set,
   so agents can tell "no AI configured" apart from "AI configured but
   failed" without ever hardcoding credentials.
-- `@recoverai/cli`: all eight commands registered, and **seven of the
-  eight are fully functional** — `init`, `ingest`, `analyze`,
-  `agent --stage diagnosis|strategy`, `simulate`, `recover`, `report`, and
+- `@recoverai/cli`: **all eight commands are fully functional**, including
+  every `agent --stage` — `init`, `ingest`, `analyze`,
+  `agent --stage detection|prioritization|diagnosis|strategy|
+  recovery_execution|verification`, `simulate`, `recover`, `report`, and
   `pipeline run` (real ingestion, real classification, real risk scoring,
   real detection/prioritization/diagnosis/strategy selection, real
   policy-checked SIMULATED recovery execution + independent verification —
   see [§7](#7-transaction-intelligence-deterministic-not-ai) and
-  [§8](#8-agent-architecture)). `pipeline run --transaction <id>` runs the
-  full six-stage pipeline for one transaction; omitting `--transaction`
-  runs it in **batch mode** over every transaction in the file (verified
-  at 10,000 transactions in ~7 seconds, fully deterministic, every
-  verification passing). `report` runs that same batch pipeline and
-  renders its `PortfolioMetrics` as a merchant-facing report (table or
-  JSON). `simulate` drives `@recoverai/integrations`' `PaymentSimulator`
-  directly across N deterministic, seeded charge attempts — no real
-  credentials, no ingested data required. `init` scaffolds a local `.env`
-  from `.env.example` (never overwriting an existing one without
-  `--force`) and reports whether the local SQLite database still needs
-  `pnpm db:generate`/`pnpm db:migrate`. `recover`/`pipeline` always run in
-  simulation mode; `recover --live` is rejected outright, not silently
-  ignored — there is no hidden live-execution path. Every `agent` stage
-  other than `diagnosis`/`strategy` still returns "Not implemented yet."
+  [§8](#8-agent-architecture)). Each `agent --stage` runs one pipeline
+  stage independently against one `--transaction <id>` and prints just
+  that stage's output — `detection`/`prioritization` are cheap and
+  deterministic; `recovery_execution`/`verification` build the same
+  diagnosis→strategy→execution chain `recover` does (always SIMULATED,
+  identically policy-gated) and surface one stage's result at a time
+  instead of the combined report. `pipeline run --transaction <id>` runs
+  the full six-stage pipeline for one transaction; omitting
+  `--transaction` runs it in **batch mode** over every transaction in the
+  file (verified at 10,000 transactions in ~7 seconds, fully
+  deterministic, every verification passing). `report` runs that same
+  batch pipeline and renders its `PortfolioMetrics` as a merchant-facing
+  report (table or JSON). `simulate` drives `@recoverai/integrations`'
+  `PaymentSimulator` directly across N deterministic, seeded charge
+  attempts — no real credentials, no ingested data required. `init`
+  scaffolds a local `.env` from `.env.example` (never overwriting an
+  existing one without `--force`) and reports whether the local SQLite
+  database still needs `pnpm db:generate`/`pnpm db:migrate`.
+  `recover`/`pipeline` always run in simulation mode; `recover --live` is
+  rejected outright, not silently ignored — there is no hidden
+  live-execution path.
 - `apps/web`: the `/dashboard` route renders real numbers (GMV, revenue at
   risk, estimated recoverable, failure breakdown, top opportunities)
   computed server-side via `@recoverai/analysis`, linking through to
@@ -791,10 +802,6 @@ problem — it does not fail silently or fall back to defaults in production.
   every view, deliberately, so that loading a page (a GET request) never
   creates a permanent audit-log/recovery-action entry. Only the CLI's
   explicit `recover`/`pipeline run`/`agent` commands write those.
-- Every `agent` stage other than `diagnosis`/`strategy` is still a stub —
-  Detection, Prioritization, Recovery Execution, and Verification run for
-  real *inside* `pipeline run`/`report`, but aren't independently
-  invocable via `agent --stage <name>` yet.
 - **No authentication or multi-tenant isolation on the dashboard.** There
   is no login and no per-merchant access control — anyone who can reach
   `apps/web` can see every ingested transaction and diagnosis. Fine for a

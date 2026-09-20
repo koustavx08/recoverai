@@ -29,11 +29,6 @@ describe("agentOptionsSchema", () => {
 });
 
 describe("runAgent", () => {
-  it("reports not_implemented for stages other than diagnosis", async () => {
-    const result = await runAgent({ stage: "prioritization", json: false }, noopLogger);
-    expect(result.status).toBe("not_implemented");
-  });
-
   it("reports not_implemented when no stage is given at all", async () => {
     const result = await runAgent({ json: false }, noopLogger);
     expect(result.status).toBe("not_implemented");
@@ -163,5 +158,80 @@ describe("runAgent", () => {
       noopLogger,
     );
     expect(result.status).toBe("error");
+  });
+
+  it("returns an error when --stage detection is given without --transaction", async () => {
+    const result = await runAgent({ stage: "detection", json: false }, noopLogger);
+    expect(result.status).toBe("error");
+  });
+
+  it("runs the detection agent against a failed transaction", async () => {
+    const result = await runAgent({ stage: "detection", transaction: "txn_00002", json: false }, noopLogger);
+    expect(result.status).toBe("detected");
+    if (result.status !== "detected") throw new Error("unreachable");
+    expect(result.transactionId).toBe("txn_00002");
+    expect(result.result.detected).toBe(true);
+  });
+
+  it("detects nothing actionable for an already-succeeded transaction", async () => {
+    const result = await runAgent({ stage: "detection", transaction: "txn_00001", json: false }, noopLogger);
+    if (result.status !== "detected") throw new Error("unreachable");
+    expect(result.result.actionable).toBe(false);
+  });
+
+  it("returns an error when --stage prioritization is given without --transaction", async () => {
+    const result = await runAgent({ stage: "prioritization", json: false }, noopLogger);
+    expect(result.status).toBe("error");
+  });
+
+  it("runs the prioritization agent against a failed transaction", async () => {
+    const result = await runAgent(
+      { stage: "prioritization", transaction: "txn_00002", json: false },
+      noopLogger,
+    );
+    expect(result.status).toBe("prioritized");
+    if (result.status !== "prioritized") throw new Error("unreachable");
+    expect(result.transactionId).toBe("txn_00002");
+    expect(result.result.factors.length).toBeGreaterThan(0);
+  });
+
+  it("reports not_implemented for prioritization on a non-risk-eligible transaction", async () => {
+    const result = await runAgent(
+      { stage: "prioritization", transaction: "txn_00001", json: false },
+      noopLogger,
+    );
+    expect(result.status).toBe("not_implemented");
+  });
+
+  it("returns an error when --stage recovery_execution is given without --transaction", async () => {
+    const result = await runAgent({ stage: "recovery_execution", json: false }, noopLogger);
+    expect(result.status).toBe("error");
+  });
+
+  it("runs the recovery execution agent deterministically, always in SIMULATION mode", async () => {
+    const result = await runAgent(
+      { stage: "recovery_execution", transaction: "txn_00002", json: false },
+      noopLogger,
+    );
+    expect(result.status).toBe("recovery_executed");
+    if (result.status !== "recovery_executed") throw new Error("unreachable");
+    expect(result.transactionId).toBe("txn_00002");
+    expect(result.execution.simulationMode).toBe(true);
+  });
+
+  it("returns an error when --stage verification is given without --transaction", async () => {
+    const result = await runAgent({ stage: "verification", json: false }, noopLogger);
+    expect(result.status).toBe("error");
+  });
+
+  it("runs the verification agent against the recovery execution it just ran", async () => {
+    const result = await runAgent(
+      { stage: "verification", transaction: "txn_00002", json: false },
+      noopLogger,
+    );
+    expect(result.status).toBe("agent_verified");
+    if (result.status !== "agent_verified") throw new Error("unreachable");
+    expect(result.transactionId).toBe("txn_00002");
+    expect(result.verification.executionId).toBe(result.execution.executionId);
   });
 });

@@ -58,7 +58,7 @@ function toRecoveryAction(outcome: RecoveryExecutionOutcome): RecoveryAction {
   };
 }
 
-function buildRecoveryExecutionAuditEvent(
+export function buildRecoveryExecutionAuditEvent(
   transaction: NormalizedTransaction,
   agentId: string,
   outcome: RecoveryExecutionOutcome,
@@ -87,7 +87,7 @@ function buildRecoveryExecutionAuditEvent(
   };
 }
 
-function buildRecoveryVerificationAuditEvent(
+export function buildRecoveryVerificationAuditEvent(
   transaction: NormalizedTransaction,
   agentId: string,
   outcome: RecoveryVerificationOutcome,

@@ -2,8 +2,16 @@ import { Command } from "commander";
 import {
   CliLogger,
   parseOptions,
+  printAgentVerified,
+  printAgentVerifiedJson,
+  printDetection,
+  printDetectionJson,
   printDiagnosis,
   printDiagnosisJson,
+  printPrioritization,
+  printPrioritizationJson,
+  printRecoveryExecuted,
+  printRecoveryExecutedJson,
   printResult,
   printStrategy,
   printStrategyJson,
@@ -30,6 +38,18 @@ export function agentCommand(): Command {
       const options = parseOptions(agentOptionsSchema, rawOptions);
       const result = await runAgent(options, new CliLogger());
 
+      if (result.status === "detected") {
+        if (result.json) printDetectionJson(result);
+        else printDetection(result);
+        return;
+      }
+
+      if (result.status === "prioritized") {
+        if (result.json) printPrioritizationJson(result);
+        else printPrioritization(result);
+        return;
+      }
+
       if (result.status === "diagnosed") {
         if (result.json) printDiagnosisJson(result);
         else printDiagnosis(result);
@@ -39,6 +59,18 @@ export function agentCommand(): Command {
       if (result.status === "strategized") {
         if (result.json) printStrategyJson(result);
         else printStrategy(result);
+        return;
+      }
+
+      if (result.status === "recovery_executed") {
+        if (result.json) printRecoveryExecutedJson(result);
+        else printRecoveryExecuted(result);
+        return;
+      }
+
+      if (result.status === "agent_verified") {
+        if (result.json) printAgentVerifiedJson(result);
+        else printAgentVerified(result);
         return;
       }
 
