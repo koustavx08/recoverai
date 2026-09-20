@@ -206,14 +206,14 @@ outcome) — reviewed and found already correct; no gap identified here.
   (`pipelineRunOptionsSchema`, `RecoverOptions`, etc.) before use — a
   malformed flag value fails validation rather than reaching business
   logic with an unexpected shape.
-- **Known limitation, not a security bug**: `packages/cli/src/index.ts`'s
-  `main()` only special-cases `CliValidationError`; any other unexpected
-  exception is re-thrown and surfaces as a raw Node stack trace rather
-  than a clean error message. Since this is a local CLI the operator runs
-  against their own machine/files, this is a robustness gap (bad
-  operator experience on an unexpected bug), not a privilege or
-  information-disclosure issue — noted here rather than fixed, to avoid
-  broadening this review's scope beyond what it verified.
+- `packages/cli/src/index.ts`'s `main()` special-cases `CliValidationError`
+  (a clean, always-shown message) and now also catches every other
+  unexpected exception, printing one clean `Unexpected error: <message>`
+  line instead of a raw Node stack trace — the full stack is still
+  available via `DEBUG=1`, just opt-in rather than always dumped at the
+  operator. This was a robustness gap (bad operator experience on an
+  unexpected bug), not a privilege or information-disclosure issue, since
+  this is a local CLI the operator runs against their own machine/files.
 
 ## API input validation (web)
 
@@ -252,41 +252,78 @@ This review assumes:
 
 ## Known limitations
 
-- **Authentication and per-merchant isolation exist now, but the account
-  model is a demo convenience, not production-grade.** `apps/web` gates
+- **Authentication and per-merchant isolation exist now, with login
+  rate-limiting and a sign-in audit trail; the account model itself is
+  still a demo convenience, not production-grade.** `apps/web` gates
   every route behind a login and scopes every data loader to the
   signed-in session's `merchantId` (`TransactionRepository`/
   `AuditEventRepository.findByMerchant`) — see [§11 of the
-  README](../README.md#11-current-project-status). What's still missing:
-  there is no self-serve account creation, invite, or password-reset
-  flow (accounts are seeded idempotently by `apps/web/lib/auth-seed.ts`
-  with a shared demo password from `DEMO_USER_PASSWORD`); no rate
-  limiting or lockout on repeated failed logins; no audit trail of
-  sign-in/sign-out events; and no role distinction — every user for a
+  README](../README.md#11-current-project-status). `auth.ts`'s
+  `authorize()` now locks an account out for 15 minutes after 5
+  consecutive failed attempts (`apps/web/lib/auth-lockout.ts`, unit
+  tested in isolation) — a locked account is rejected outright, without
+  even comparing the password, until the cooldown expires — and every
+  sign-in success/failure is written to `AuditEventRepository` as a
+  `user_signed_in`/`user_sign_in_failed` event, scoped to that user's
+  merchant. What's still missing: there is no self-serve account
+  creation, invite, or password-reset flow (accounts are seeded
+  idempotently by `apps/web/lib/auth-seed.ts` with a shared demo password
+  from `DEMO_USER_PASSWORD`); sign-out is not separately audited (only
+  sign-in/sign-in-failure); and no role distinction — every user for a
   merchant has identical access to that merchant's data. None of this
   blocks the core property (one merchant's data is inaccessible to
   another's signed-in user), but a real multi-user deployment needs a
   real account-provisioning system in place of `auth-seed.ts`.
-- **No `Content-Security-Policy`.** `apps/web/next.config.ts` sets
-  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
-  `Referrer-Policy: strict-origin-when-cross-origin`, and a restrictive
-  `Permissions-Policy` on every response — the well-established headers
-  that carry no risk of breaking the app. A CSP strict enough to matter
-  was deliberately left out: getting one right against Next's own inline
-  hydration scripts/styles needs testing every route by hand, and a
-  wrong one is worse than none (either silently too permissive to help,
-  or breaks the app).
-- **No persistent audit store.** Every `AuditEvent` shown anywhere
-  (CLI, `/audit-log`) is computed fresh per process/request from an
-  in-memory store — there is no tamper-evidence, no retention, and
-  nothing survives a restart. An audit trail that can't outlive the
-  process it ran in is not yet a real compliance-grade audit trail.
-- **CLI unexpected-error handling is not clean** (see "CLI safety"
-  above) — a bug surfaces as a raw stack trace, not a graceful message.
+- **`Content-Security-Policy` is present but not strict on `script-src`/
+  `style-src`.** `apps/web/next.config.ts` sets `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+  strict-origin-when-cross-origin`, a restrictive `Permissions-Policy`,
+  and now a `Content-Security-Policy` on every response —
+  `default-src 'self'`, `object-src 'none'`, `base-uri 'self'`,
+  `form-action 'self'`, and `frame-ancestors 'none'` are all real,
+  effective restrictions. `script-src`/`style-src` include
+  `'unsafe-inline'` deliberately, not by oversight: Next's App Router
+  streams RSC payloads to the client via inline `<script>` tags on every
+  page, and a plain `script-src 'self'` blocks them, breaking hydration
+  everywhere. The strict alternative is a per-request nonce generated in
+  `middleware.ts` — the same file that gates authentication — and this
+  review chose not to touch that file for a CSP nonce, to avoid any risk
+  of regressing the already-verified auth gate. Verified: a production
+  `next build && next start`, signed in via a real HTTP flow, renders
+  `/dashboard` correctly with this CSP applied (see [§11 of the
+  README](../README.md#11-current-project-status)).
+- **Audit events written by the CLI are persistent; the dashboard's own
+  audit view is not tamper-evident.** `AuditEventRepository.append` is
+  backed by the same SQLite/Prisma store as everything else
+  (`packages/database/src/prisma/audit-event-repository.ts`) — every
+  event the CLI (`recoverai recover`/`pipeline run`/`agent`, and now the
+  dashboard's own sign-in/sign-in-failure events, see [§11 of the
+  README](../README.md#11-current-project-status)) writes survives a
+  restart. What's still missing: no cryptographic tamper-evidence (no
+  hash-chaining between events, so a direct database edit isn't
+  detectable), and no explicit retention/rotation policy. Separately,
+  `/audit-log` itself still recomputes its view fresh from a pipeline
+  re-run rather than reading back from this store — see the "dashboard
+  doesn't record its own page views" note in the README; that's a
+  deliberate choice (a GET must never create a permanent record), not an
+  oversight, but it does mean the dashboard's audit view and the durable
+  store can show different events for the same transaction.
+- **CLI unexpected-error handling now prints one clean line by
+  default.** `packages/cli/src/index.ts`'s `main()` catches any error
+  that isn't a `CliValidationError` and prints `Unexpected error: <
+  message>` plus a hint to re-run with `DEBUG=1` for the full stack
+  trace — the raw Node stack is still available, just opt-in, rather
+  than always dumped at the operator. This is a UX fix only: it doesn't
+  change which errors are thrown or suppress anything.
 - **The redaction patterns in `redact-secrets.ts` are heuristic, not
-  exhaustive.** They cover Anthropic/OpenAI-style key shapes and Bearer
-  tokens specifically; a differently-shaped credential in a future
-  provider's error message would not be caught by today's patterns.
+  exhaustive — broadened, but still not a substitute for never letting a
+  provider's raw error reach storage in the first place.** Beyond
+  Anthropic/OpenAI/Stripe-style `sk-`/`sk_` keys and Bearer tokens, it now
+  also covers AWS access key IDs, GitHub tokens, Slack tokens, JWTs, and
+  any value explicitly labeled as an `api_key`/`secret`/`token`/
+  `password`/`auth` in text (`key: "..."`, `token=...`). A differently
+  shaped, unlabeled credential from a future provider could still slip
+  through — this is defense in depth, not a guarantee.
 - **This review is code-level, not operational.** It did not check
   deployment configuration, dependency supply-chain provenance (beyond
   what's described above), or infrastructure — because none of that

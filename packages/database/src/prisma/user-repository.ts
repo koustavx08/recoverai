@@ -9,6 +9,8 @@ function toDomain(row: UserRow): User {
     passwordHash: row.passwordHash,
     merchantId: brand<string, "MerchantId">(row.merchantId),
     createdAt: row.createdAt as ISODateString,
+    failedLoginAttempts: row.failedLoginAttempts,
+    lockedUntil: row.lockedUntil as ISODateString | null,
   };
 }
 
@@ -31,6 +33,8 @@ export class PrismaUserRepository implements UserRepository {
       passwordHash: user.passwordHash,
       merchantId: user.merchantId,
       createdAt: user.createdAt,
+      failedLoginAttempts: user.failedLoginAttempts,
+      lockedUntil: user.lockedUntil,
     };
     await this.client.user.upsert({
       where: { id: user.id },

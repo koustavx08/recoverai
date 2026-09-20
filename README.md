@@ -548,6 +548,7 @@ generates and writes one for you.
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | `PAYMENT_PROVIDER=razorpay`                                                          |
 | `AI_API_KEY` / `AI_MODEL`                 | `NODE_ENV=production`; optional otherwise — unset means the Diagnosis/Strategy agents run their deterministic fallback |
 | `NEXT_PUBLIC_APP_URL`                     | always (defaults to `http://localhost:3000`)                                         |
+| `DEBUG`                                   | optional, CLI only — set to `1`/`true` to get the full Node stack trace for an unexpected CLI error instead of the default one-line message |
 
 Configuration is loaded and validated once, at process startup, via
 `@recoverai/config`'s `loadConfig()` (Zod-backed). Missing required
@@ -836,6 +837,39 @@ problem — it does not fail silently or fall back to defaults in production.
   scenarios remain deliberately unscoped (they run against an isolated
   in-memory store, not real merchant data — see the `/demo` note above);
   every other route is both authenticated and merchant-scoped now.
+  Sign-in is also rate-limited: `apps/web/lib/auth-lockout.ts` (unit
+  tested standalone) locks an account out for 15 minutes after 5
+  consecutive failed attempts — `User.failedLoginAttempts`/`lockedUntil`
+  persist that state, and a locked account is rejected before its
+  password is even checked. Every sign-in success or failure is written
+  to `AuditEventRepository` as a `user_signed_in`/`user_sign_in_failed`
+  event, scoped to that user's merchant — verified end-to-end against a
+  production build: 5 wrong-password attempts locked the account, a 6th
+  attempt with the *correct* password was still rejected, and both the
+  lockout state and every audit event were confirmed in the database.
+- **Baseline security headers now include a `Content-Security-Policy`.**
+  `apps/web/next.config.ts` adds `default-src 'self'`, `object-src
+  'none'`, `base-uri 'self'`, `form-action 'self'`, and `frame-ancestors
+  'none'` to the existing `X-Frame-Options`/`X-Content-Type-Options`/
+  `Referrer-Policy`/`Permissions-Policy` headers.
+  `script-src`/`style-src` keep `'unsafe-inline'` — Next's App Router
+  streams RSC payloads via inline `<script>` tags on every page, so a
+  plain `'self'` breaks hydration everywhere; a strict nonce-based CSP
+  would need per-request wiring in `middleware.ts`, the same file that
+  gates authentication, and this pass deliberately didn't touch that file
+  for it. See [`docs/security-model.md`](./docs/security-model.md) for
+  the full trade-off. Verified against a production
+  `next build && next start`: the header is present on every response,
+  and `/dashboard` renders correctly with it applied.
+- **CLI errors are legible by default.** An unexpected exception (not a
+  `CliValidationError`, which already prints cleanly) now prints one
+  `Unexpected error: <message>` line instead of a raw Node stack trace;
+  `DEBUG=1` opts back into the full trace.
+- **Secret redaction now covers more credential shapes.**
+  `packages/agents/src/security/redact-secrets.ts` added AWS access key
+  IDs, GitHub/Slack tokens, JWTs, and any value explicitly labeled as a
+  credential in text (`api_key: "..."`, `token=...`), alongside the
+  existing Anthropic/OpenAI/Stripe-style key and Bearer-token patterns.
 
 ## 12. Planned implementation phases
 

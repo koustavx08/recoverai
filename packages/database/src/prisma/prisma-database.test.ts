@@ -209,6 +209,8 @@ describe("createPrismaDatabase", () => {
       passwordHash: "$2b$10$abcdefghijklmnopqrstuv",
       merchantId,
       createdAt: iso("2026-01-01T00:00:00.000Z"),
+      failedLoginAttempts: 0,
+      lockedUntil: null,
     });
 
     const byId = await db.users.findById(userId);
@@ -219,6 +221,36 @@ describe("createPrismaDatabase", () => {
     expect(byEmail?.id).toBe(userId);
 
     expect(await db.users.findByEmail("nobody@example.com")).toBeNull();
+  });
+
+  it("round-trips a user's lockout state through an update save", async () => {
+    await db.users.save({
+      id: userId,
+      email: "prisma_test_user@example.com",
+      passwordHash: "$2b$10$abcdefghijklmnopqrstuv",
+      merchantId,
+      createdAt: iso("2026-01-01T00:00:00.000Z"),
+      failedLoginAttempts: 3,
+      lockedUntil: iso("2026-01-01T00:15:00.000Z"),
+    });
+
+    const locked = await db.users.findById(userId);
+    expect(locked?.failedLoginAttempts).toBe(3);
+    expect(locked?.lockedUntil).toBe(iso("2026-01-01T00:15:00.000Z"));
+
+    await db.users.save({
+      id: userId,
+      email: "prisma_test_user@example.com",
+      passwordHash: "$2b$10$abcdefghijklmnopqrstuv",
+      merchantId,
+      createdAt: iso("2026-01-01T00:00:00.000Z"),
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+    });
+
+    const reset = await db.users.findById(userId);
+    expect(reset?.failedLoginAttempts).toBe(0);
+    expect(reset?.lockedUntil).toBeNull();
   });
 
   it("persists across independently created Database handles (same process)", async () => {

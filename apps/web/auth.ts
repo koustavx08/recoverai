@@ -1,10 +1,13 @@
 import bcrypt from "bcryptjs";
+import { randomUUID } from "node:crypto";
 import NextAuth, { type Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import { createPrismaDatabase } from "@recoverai/database";
+import { brand, type AuditEvent } from "@recoverai/core";
 import { authConfig } from "./auth.config";
 import { ensureDemoUsersSeeded } from "./lib/auth-seed";
+import { isLockedOut, nextStateOnFailure, nextStateOnSuccess } from "./lib/auth-lockout";
 
 /**
  * Dashboard authentication — JWT sessions (no `Session`/`Account` tables
@@ -38,11 +41,58 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const db = createPrismaDatabase();
         await ensureDemoUsersSeeded(db);
 
+        // Deliberately no audit event for an unrecognized email — an
+        // AuditEvent requires a merchantId, and there is none to attach a
+        // failed attempt against an account that does not exist to; it
+        // also avoids persisting arbitrary attacker-supplied email
+        // strings verbatim into the audit trail.
         const user = await db.users.findByEmail(email);
         if (!user) return null;
 
+        const now = new Date();
+
+        const recordFailure = async (reason: "locked" | "bad_password") => {
+          if (reason === "bad_password") {
+            await db.users.save({ ...user, ...nextStateOnFailure(user, now) });
+          }
+          const event: AuditEvent = {
+            id: brand<string, "AuditEventId">(randomUUID()),
+            type: "user_sign_in_failed",
+            merchantId: user.merchantId,
+            actorType: "user",
+            actorId: user.id,
+            summary: `Sign-in failed for ${user.email} (${reason === "locked" ? "account locked" : "incorrect password"}).`,
+            data: { reason },
+            occurredAt: brand<string, "ISODateString">(now.toISOString()),
+          };
+          await db.auditEvents.append(event);
+        };
+
+        if (isLockedOut(user, now)) {
+          await recordFailure("locked");
+          return null;
+        }
+
         const passwordMatches = await bcrypt.compare(password, user.passwordHash);
-        if (!passwordMatches) return null;
+        if (!passwordMatches) {
+          await recordFailure("bad_password");
+          return null;
+        }
+
+        if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+          await db.users.save({ ...user, ...nextStateOnSuccess() });
+        }
+        const signedInEvent: AuditEvent = {
+          id: brand<string, "AuditEventId">(randomUUID()),
+          type: "user_signed_in",
+          merchantId: user.merchantId,
+          actorType: "user",
+          actorId: user.id,
+          summary: `${user.email} signed in.`,
+          data: {},
+          occurredAt: brand<string, "ISODateString">(now.toISOString()),
+        };
+        await db.auditEvents.append(signedInEvent);
 
         return { id: user.id, email: user.email, merchantId: user.merchantId };
       },

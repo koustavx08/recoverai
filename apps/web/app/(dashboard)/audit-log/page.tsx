@@ -17,6 +17,8 @@ const EVENT_BADGE_VARIANT: Readonly<Record<AuditEventType, BadgeProps["variant"]
   recovery_verified: "success",
   agent_decision_recorded: "neutral",
   system_error: "danger",
+  user_signed_in: "success",
+  user_sign_in_failed: "danger",
 };
 
 export default async function AuditLogPage() {

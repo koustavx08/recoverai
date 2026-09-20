@@ -98,7 +98,9 @@ export type AuditEventType =
   | "recovery_action_executed"
   | "recovery_verified"
   | "agent_decision_recorded"
-  | "system_error";
+  | "system_error"
+  | "user_signed_in"
+  | "user_sign_in_failed";
 
 /** Actor that initiated an auditable event. */
 export type ActorType = "system" | "agent" | "user" | "webhook";

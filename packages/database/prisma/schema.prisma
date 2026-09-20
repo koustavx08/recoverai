@@ -116,11 +116,15 @@ model RecoveryAction {
 }
 
 model User {
-  id           String @id
-  email        String @unique
-  passwordHash String
-  merchantId   String
-  createdAt    String
+  id                 String  @id
+  email              String  @unique
+  passwordHash       String
+  merchantId         String
+  createdAt          String
+  /** Consecutive failed sign-in attempts since the last success; reset to 0 on success. */
+  failedLoginAttempts Int    @default(0)
+  /** ISO timestamp until which sign-in is locked out, or null when not locked. */
+  lockedUntil        String?
 
   @@index([merchantId])
 }

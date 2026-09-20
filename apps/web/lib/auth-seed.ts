@@ -40,6 +40,8 @@ export async function ensureDemoUsersSeeded(db: Database): Promise<void> {
       passwordHash: await bcrypt.hash(DEMO_USER_PASSWORD, 10),
       merchantId: brand<string, "MerchantId">(demo.merchantId),
       createdAt: brand<string, "ISODateString">(new Date().toISOString()),
+      failedLoginAttempts: 0,
+      lockedUntil: null,
     });
   }
 
