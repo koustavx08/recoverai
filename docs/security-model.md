@@ -267,6 +267,15 @@ This review assumes:
   blocks the core property (one merchant's data is inaccessible to
   another's signed-in user), but a real multi-user deployment needs a
   real account-provisioning system in place of `auth-seed.ts`.
+- **No `Content-Security-Policy`.** `apps/web/next.config.ts` sets
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and a restrictive
+  `Permissions-Policy` on every response — the well-established headers
+  that carry no risk of breaking the app. A CSP strict enough to matter
+  was deliberately left out: getting one right against Next's own inline
+  hydration scripts/styles needs testing every route by hand, and a
+  wrong one is worse than none (either silently too permissive to help,
+  or breaks the app).
 - **No persistent audit store.** Every `AuditEvent` shown anywhere
   (CLI, `/audit-log`) is computed fresh per process/request from an
   in-memory store — there is no tamper-evidence, no retention, and
