@@ -1,11 +1,14 @@
 import { basename } from "node:path";
 import type { AnalysisResult, IngestionSummary } from "@recoverai/analysis";
+import type { BatchPipelineResult } from "@recoverai/agents";
 import type { FailureReasonCode, TransactionStatus } from "@recoverai/core";
 import type {
   DiagnosedResult,
   PipelineBatchResult,
   PipelineSingleResult,
   RecoveredResult,
+  ReportedResult,
+  SimulatedResult,
   StrategizedResult,
 } from "../services/types.js";
 import { formatCount, formatMoney } from "./format.js";
@@ -467,17 +470,16 @@ export function printPipelineSingleJson(result: PipelineSingleResult): void {
   console.info(JSON.stringify({ result: result.result, simulated: true }, null, 2));
 }
 
-export function printPipelineBatch(result: PipelineBatchResult): void {
-  const { batch } = result;
+function buildBatchReportLines(heading: string, file: string, batch: BatchPipelineResult): string[] {
   const { metrics } = batch;
   const out: string[] = [];
 
-  out.push("RECOVERAI BATCH RECOVERY");
+  out.push(heading);
   out.push("");
   out.push("Mode:");
   out.push("  SIMULATION ONLY");
   out.push("");
-  out.push(`File: ${basename(result.file)}`);
+  out.push(`File: ${basename(file)}`);
   out.push("");
   out.push(`Transactions processed: ${formatCount(batch.total)}`);
 
@@ -580,9 +582,59 @@ export function printPipelineBatch(result: PipelineBatchResult): void {
   out.push("");
   out.push("No real money was moved. All figures above are SIMULATED — not confirmed recovered revenue.");
 
-  console.info(out.join("\n"));
+  return out;
+}
+
+export function printPipelineBatch(result: PipelineBatchResult): void {
+  console.info(buildBatchReportLines("RECOVERAI BATCH RECOVERY", result.file, result.batch).join("\n"));
 }
 
 export function printPipelineBatchJson(result: PipelineBatchResult): void {
   console.info(JSON.stringify({ file: result.file, batch: result.batch, simulated: true }, null, 2));
+}
+
+export function printReportTable(result: ReportedResult): void {
+  console.info(
+    buildBatchReportLines("RECOVERAI REVENUE RECOVERY REPORT", result.file, result.batch).join("\n"),
+  );
+}
+
+export function printReportJson(result: ReportedResult): void {
+  console.info(JSON.stringify({ file: result.file, batch: result.batch, simulated: true }, null, 2));
+}
+
+export function printSimulate(result: SimulatedResult): void {
+  const out: string[] = [];
+  out.push("RECOVERAI PAYMENT SIMULATION");
+  out.push("");
+  out.push("No real payment credentials were used — every outcome came from PaymentSimulator.");
+  out.push("");
+  out.push(line("Attempts:", formatCount(result.count), 16));
+  out.push(line("Succeeded:", formatCount(result.succeeded), 16));
+  out.push(line("Failed:", formatCount(result.failed), 16));
+  out.push(line("Success rate:", `${result.successRate.toFixed(1)}%`, 16));
+
+  const failureEntries = Object.entries(result.failureBreakdown).sort(([, a], [, b]) => b - a);
+  if (failureEntries.length > 0) {
+    out.push("");
+    out.push("Failure breakdown:");
+    for (const [code, count] of failureEntries) {
+      out.push(line(`${code}:`, formatCount(count), 20));
+    }
+  }
+
+  if (result.sample.length > 0) {
+    out.push("");
+    out.push(`Sample (first ${result.sample.length}):`);
+    for (const item of result.sample) {
+      const outcome = item.succeeded ? "succeeded" : `failed (${item.failureReasonCode ?? "unknown"})`;
+      out.push(`  ${item.transactionId} — ${item.paymentMethod} — ${outcome}`);
+    }
+  }
+
+  console.info(out.join("\n"));
+}
+
+export function printSimulateJson(result: SimulatedResult): void {
+  console.info(JSON.stringify(result, null, 2));
 }

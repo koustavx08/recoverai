@@ -10,7 +10,7 @@ import type {
   StrategyDecision,
   StrategyExecutionMeta,
 } from "@recoverai/agents";
-import type { FailureReasonCode, Money } from "@recoverai/core";
+import type { FailureReasonCode, Money, PaymentMethod } from "@recoverai/core";
 
 export type CommandName =
   "init" | "ingest" | "analyze" | "simulate" | "recover" | "report" | "agent" | "pipeline";
@@ -96,6 +96,32 @@ export interface PipelineBatchResult {
   readonly json: boolean;
 }
 
+export interface SimulateSample {
+  readonly transactionId: string;
+  readonly paymentMethod: PaymentMethod;
+  readonly succeeded: boolean;
+  readonly failureReasonCode?: string;
+}
+
+export interface SimulatedResult {
+  readonly status: "simulated";
+  readonly command: "simulate";
+  readonly count: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly successRate: number;
+  readonly failureBreakdown: Readonly<Record<string, number>>;
+  readonly sample: readonly SimulateSample[];
+}
+
+export interface ReportedResult {
+  readonly status: "reported";
+  readonly command: "report";
+  readonly file: string;
+  readonly batch: BatchPipelineResult;
+  readonly format: "table" | "json";
+}
+
 export type CommandResult =
   | NotImplementedResult
   | OkResult
@@ -106,7 +132,9 @@ export type CommandResult =
   | StrategizedResult
   | RecoveredResult
   | PipelineSingleResult
-  | PipelineBatchResult;
+  | PipelineBatchResult
+  | SimulatedResult
+  | ReportedResult;
 
 export function notImplemented(
   command: CommandName,

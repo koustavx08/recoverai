@@ -170,12 +170,12 @@ depend on `core` for types — none of them define their own copies of
 ## 6. CLI vision
 
 ```text
-recoverai init       # scaffold local project configuration          [not implemented]
+recoverai init       # scaffold local project configuration          [implemented]
 recoverai ingest     # load transaction data (JSON/CSV) into the store [implemented]
 recoverai analyze    # run the deterministic risk-analysis pipeline    [implemented]
-recoverai simulate   # exercise the pipeline via the payment simulator [not implemented]
+recoverai simulate   # exercise the pipeline via the payment simulator [implemented]
 recoverai recover    # run a SIMULATED recovery execution               [implemented — simulation only]
-recoverai report     # generate a merchant-facing recovery report      [not implemented]
+recoverai report     # generate a merchant-facing recovery report      [implemented — simulation only]
 recoverai agent      # run/inspect a single agent pipeline stage       [diagnosis, strategy implemented]
 recoverai pipeline   # run the full 6-stage pipeline (single or batch)  [implemented — simulation only]
 ```
@@ -208,18 +208,33 @@ recoverai pipeline run --file data/demo/scenarios.json         # 5 curated demo 
 recoverai pipeline run --transaction demo_txn_04 --file data/demo/scenarios.json  # one case, full walkthrough
 ```
 
-`ingest`, `analyze`, `agent`, `recover`, and `pipeline` all read and write
-through the same durable, SQLite-backed store (`packages/database`'s
-`createPrismaDatabase()`) — data ingested in one invocation is visible to
-the next. `init`, `simulate`, `report`, and every
-`agent` stage other than `diagnosis`/`strategy` still validate their
-arguments for real but return "Not implemented yet." for the actual
-operation. `recover` and `pipeline` always run in simulation mode;
-`recover --live` is rejected outright rather than silently ignored —
-there is no hidden live-execution path anywhere in this codebase.
-`pipeline run` runs in **batch mode over every transaction in the file**
-whenever `--transaction` is omitted — this is the one command that
-processes a whole file's worth of transactions in one invocation.
+`ingest`, `analyze`, `agent`, `recover`, `report`, and `pipeline` all read
+and write through the same durable, SQLite-backed store
+(`packages/database`'s `createPrismaDatabase()`) — data ingested in one
+invocation is visible to the next. Every `agent` stage other than
+`diagnosis`/`strategy` still validates its arguments for real but returns
+"Not implemented yet." for the actual operation. `recover` and `pipeline`
+always run in simulation mode; `recover --live` is rejected outright
+rather than silently ignored — there is no hidden live-execution path
+anywhere in this codebase. `pipeline run` runs in **batch mode over every
+transaction in the file** whenever `--transaction` is omitted — this is
+the one command that processes a whole file's worth of transactions in
+one invocation.
+
+```bash
+recoverai init                          # scaffold .env from .env.example (skips an existing one unless --force)
+recoverai simulate --count 25 --seed abc  # exercise PaymentSimulator across 25 synthetic charge attempts
+recoverai report                          # merchant-facing SIMULATED recovery report over the sample dataset
+recoverai report --format json --file data/generated/transactions.json
+```
+
+`report` runs the same real `RecoveryPipeline`/`BatchRecoveryPipeline`
+`pipeline run` does — it's a differently-labeled presentation of the
+identical portfolio metrics, not a separate computation. `simulate`
+exercises `@recoverai/integrations`' `PaymentSimulator` directly (charge
+attempts only, not the full agent pipeline) — useful for sanity-checking
+the simulator in isolation. `init` never touches a pre-existing `.env`
+without `--force`, since a real one may already hold credentials.
 
 **Demo scenarios.** `data/demo/scenarios.json` is a small, hand-picked
 dataset (6 transactions, 5 named cases) chosen to walk through the full
@@ -590,20 +605,28 @@ problem — it does not fail silently or fall back to defaults in production.
   `config.ai.isConfigured` is true only once both a key and model are set,
   so agents can tell "no AI configured" apart from "AI configured but
   failed" without ever hardcoding credentials.
-- `@recoverai/cli`: all eight commands registered. **`ingest`, `analyze`,
-  `agent --stage diagnosis|strategy`, `recover`, and `pipeline run` are
-  fully functional** (real ingestion, real classification, real risk
-  scoring, real detection/prioritization/diagnosis/strategy selection,
-  real policy-checked SIMULATED recovery execution + independent
-  verification — see [§7](#7-transaction-intelligence-deterministic-not-ai)
-  and [§8](#8-agent-architecture)). `pipeline run --transaction <id>` runs
-  the full six-stage pipeline for one transaction; omitting `--transaction`
+- `@recoverai/cli`: all eight commands registered, and **seven of the
+  eight are fully functional** — `init`, `ingest`, `analyze`,
+  `agent --stage diagnosis|strategy`, `simulate`, `recover`, `report`, and
+  `pipeline run` (real ingestion, real classification, real risk scoring,
+  real detection/prioritization/diagnosis/strategy selection, real
+  policy-checked SIMULATED recovery execution + independent verification —
+  see [§7](#7-transaction-intelligence-deterministic-not-ai) and
+  [§8](#8-agent-architecture)). `pipeline run --transaction <id>` runs the
+  full six-stage pipeline for one transaction; omitting `--transaction`
   runs it in **batch mode** over every transaction in the file (verified
   at 10,000 transactions in ~7 seconds, fully deterministic, every
-  verification passing). `recover`/`pipeline` always run in simulation
-  mode; `recover --live` is rejected outright, not silently ignored —
-  there is no hidden live-execution path. `init`, `simulate`, `report`,
-  and every other `agent` stage still return "Not implemented yet."
+  verification passing). `report` runs that same batch pipeline and
+  renders its `PortfolioMetrics` as a merchant-facing report (table or
+  JSON). `simulate` drives `@recoverai/integrations`' `PaymentSimulator`
+  directly across N deterministic, seeded charge attempts — no real
+  credentials, no ingested data required. `init` scaffolds a local `.env`
+  from `.env.example` (never overwriting an existing one without
+  `--force`) and reports whether the local SQLite database still needs
+  `pnpm db:generate`/`pnpm db:migrate`. `recover`/`pipeline` always run in
+  simulation mode; `recover --live` is rejected outright, not silently
+  ignored — there is no hidden live-execution path. Every `agent` stage
+  other than `diagnosis`/`strategy` still returns "Not implemented yet."
 - `apps/web`: the `/dashboard` route renders real numbers (GMV, revenue at
   risk, estimated recoverable, failure breakdown, top opportunities)
   computed server-side via `@recoverai/analysis`, linking through to
@@ -739,8 +762,10 @@ problem — it does not fail silently or fall back to defaults in production.
   every view, deliberately, so that loading a page (a GET request) never
   creates a permanent audit-log/recovery-action entry. Only the CLI's
   explicit `recover`/`pipeline run`/`agent` commands write those.
-- `init`, `simulate`, `report`, and every `agent` stage other than
-  `diagnosis`/`strategy` are still stubs.
+- Every `agent` stage other than `diagnosis`/`strategy` is still a stub —
+  Detection, Prioritization, Recovery Execution, and Verification run for
+  real *inside* `pipeline run`/`report`, but aren't independently
+  invocable via `agent --stage <name>` yet.
 - **No authentication or multi-tenant isolation on the dashboard.** There
   is no login and no per-merchant access control — anyone who can reach
   `apps/web` can see every ingested transaction and diagnosis. Fine for a
